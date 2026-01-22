@@ -326,6 +326,38 @@
                     <div class="input-wrapper">
                         <i data-lucide="search" size="20" style="color:#94a3b8"></i>
                         <input type="tel" placeholder="Buscar por número...">
+                        <div id="envio-p4" class="hidden">
+    <div style="display:flex; align-items:center; gap:15px; margin-bottom:25px;">
+        <i data-lucide="arrow-left" size="24" onclick="voltarParaPasso(2)" style="cursor:pointer"></i>
+        <h2 class="screen-title">Revisar Envio</h2>
+    </div>
+
+    <div class="destinatario-card" style="border: 2px solid var(--brand-orange); background: #fffaf5;">
+        <span class="destinatario-label">Destino</span>
+        <strong class="destinatario-nome" id="rev-nome">Maria Silva</strong>
+        <span class="destinatario-info" id="rev-end">Rua das Flores, 123</span>
+    </div>
+
+    <div style="background: white; padding: 20px; border-radius: 24px; margin-bottom: 20px; border: 1px solid var(--border-color);">
+        <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+            <span style="color:var(--text-sub); font-weight:600;">Serviço</span>
+            <strong id="rev-servico">Standard</strong>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+            <span style="color:var(--text-sub); font-weight:600;">Tamanho</span>
+            <strong id="rev-tamanho">Pacote P</strong>
+        </div>
+        <div style="display:flex; justify-content:space-between; padding-top:15px; border-top:1px dashed #e2e8f0;">
+            <span style="color:var(--text-main); font-weight:800;">Total do Frete</span>
+            <strong style="color:var(--brand-orange); font-size:20px;">R$ 12,50</strong>
+        </div>
+    </div>
+
+    <button class="btn-main" onclick="confirmarEnvioFinal()" style="background:#10b981;">
+        Confirmar e Solicitar Coleta
+    </button>
+    <p style="text-align:center; margin-top:20px; font-size:14px; color:var(--text-sub); font-weight:700; cursor:pointer;" onclick="voltarParaPasso(2)">Ajustar detalhes</p>
+</div>
                     </div>
                 </div>
 
