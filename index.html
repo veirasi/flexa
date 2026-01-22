@@ -80,12 +80,41 @@
         .stat-card { background: white; padding: 20px; border-radius: 24px; border: 1px solid var(--border-color); }
 
         .bottom-nav { 
-            position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 420px; 
-            background: #00bcd4; display: none; justify-content: space-around; padding: 10px 10px 30px 10px; 
-            z-index: 1000; border-radius: 20px 20px 0 0; box-shadow: 0 -5px 20px rgba(0,0,0,0.05);
-        }
-        .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; color: #ffffff; cursor: pointer; font-size: 11px; font-weight: 700; }
-        .nav-fab { background: var(--brand-orange); width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-top: -35px; border: 4px solid white; box-shadow: 0 8px 20px rgba(245,130,32,0.3); }
+    position: fixed; 
+    bottom: 0; 
+    left: 50%; 
+    transform: translateX(-50%); 
+    width: 100%; 
+    max-width: 420px; 
+    /* Mudança da cor: fundo branco com leve transparência */
+    background: rgba(255, 255, 255, 0.95); 
+    backdrop-filter: blur(10px);
+    display: none; 
+    justify-content: space-around; 
+    padding: 12px 10px 32px 10px; 
+    z-index: 1000; 
+    border-radius: 24px 24px 0 0; 
+    /* Adicionada uma borda fina no topo para dar acabamento */
+    border-top: 1px solid rgba(0,0,0,0.05);
+    box-shadow: 0 -10px 30px rgba(0,0,0,0.08);
+}
+        .nav-item { 
+    display: flex; 
+    flex-direction: column; 
+    align-items: center; 
+    gap: 4px; 
+    /* Cor cinza suave para itens inativos */
+    color: #94a3b8; 
+    cursor: pointer; 
+    font-size: 11px; 
+    font-weight: 700; 
+    transition: var(--transition);
+}
+
+/* Cor para quando o item estiver ativo */
+.nav-item.active {
+    color: var(--brand-orange);
+}
 
         .hidden { display: none !important; }
         /* ADICIONE ISTO AQUI */
