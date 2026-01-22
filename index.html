@@ -185,7 +185,46 @@
             text-transform: uppercase; 
         }
         .pill-em-rota { background: #ecfdf5; color: #10b981; }
-        
+      /* Animação suave para troca de passos internos */
+.fade-step {
+    animation: fadeStep 0.35s ease-out;
+}
+
+@keyframes fadeStep {
+    from { opacity: 0; transform: translateX(10px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+ /* Ajuste para que o grid de 2 colunas não estique os cards */
+.selection-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr); /* Forçamos a base de 3 colunas para alinhar com o de baixo */
+    gap: 12px;
+    margin-bottom: 25px;
+}
+
+/* Padronização do tamanho dos boxes */
+.select-box {
+    background: white;
+    border: 2px solid #f1f5f9;
+    border-radius: 20px;
+    padding: 12px 5px; /* Reduzi o padding vertical para ficarem mais baixos */
+    text-align: center;
+    cursor: pointer;
+    transition: var(--transition);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 85px; /* Altura fixa para garantir harmonia entre todos */
+}
+
+/* Ajuste dos ícones dentro dos boxes para não empurrarem muito o texto */
+.select-box i {
+    margin-bottom: 5px;
+    width: 20px;
+    height: 20px;
+}       
  </style>
 </head>
 <body>
@@ -280,7 +319,7 @@
 
         <section id="view-novo-envio" class="view">
             <div id="envio-p1">
-                <h1 style="font-size: 28px; font-weight: 900; margin-bottom: 30px; letter-spacing: -1px;">Para quem enviar?</h1>
+                <h2 style="font-size: 24px; font-weight: 900; margin-bottom: 30px; letter-spacing: -1px;">Para quem enviar?</h2>
                 
                 <div class="form-group">
                     <label>WhatsApp do Cliente</label>
@@ -307,7 +346,7 @@
             <div id="envio-p2" class="hidden">
                 <div style="display:flex; align-items:center; gap:15px; margin-bottom:25px;">
                     <i data-lucide="arrow-left" size="24" onclick="voltarParaPasso(1)" style="cursor:pointer"></i>
-                    <h2 style="font-size: 24px; font-weight: 900; letter-spacing: -0.5px;">Detalhes do Envio</h2>
+                    <h2 style="font-size: 24px; font-weight: 900; letter-spacing: -0.5px;">Detalhes do envio</h2>
                 </div>
 
                 <div class="destinatario-card">
@@ -410,19 +449,37 @@
 
         /* LÓGICA DE PASSOS DO ENVIO */
         function irParaPasso2(nome, endereco, whats) {
-            document.getElementById('card-nome').innerText = nome;
-            document.getElementById('card-endereco').innerText = endereco;
-            document.getElementById('card-whatsapp').innerText = whats;
-            document.getElementById('envio-p1').classList.add('hidden');
-            document.getElementById('envio-p2').classList.remove('hidden');
-            window.scrollTo(0,0);
-        }
+    const p1 = document.getElementById('envio-p1');
+    const p2 = document.getElementById('envio-p2');
 
-        function voltarParaPasso(p) {
-            document.getElementById('envio-p1').classList.add('hidden');
-            document.getElementById('envio-p2').classList.add('hidden');
-            document.getElementById('envio-p' + p).classList.remove('hidden');
-        }
+    // Preenche os dados
+    document.getElementById('card-nome').innerText = nome;
+    document.getElementById('card-endereco').innerText = endereco;
+    document.getElementById('card-whatsapp').innerText = whats;
+
+    // Troca as telas com animação
+    p1.classList.add('hidden');
+    p2.classList.remove('hidden');
+    p2.classList.add('fade-step'); // Adiciona o efeito suave
+
+    window.scrollTo(0,0);
+    
+    // Remove a classe após a animação para poder repetir depois
+    setTimeout(() => p2.classList.remove('fade-step'), 400);
+}
+
+function voltarParaPasso(p) {
+    // Esconde todos os passos de envio
+    document.getElementById('envio-p1').classList.add('hidden');
+    document.getElementById('envio-p2').classList.add('hidden');
+    if(document.getElementById('envio-p3')) document.getElementById('envio-p3').classList.add('hidden');
+
+    const destino = document.getElementById('envio-p' + p);
+    destino.classList.remove('hidden');
+    destino.classList.add('fade-step'); // Aplica suavidade ao voltar também
+
+    setTimeout(() => destino.classList.remove('fade-step'), 400);
+}
 
         function selecionarServico(tipo) {
             document.getElementById('srv-std').classList.remove('active');
@@ -477,7 +534,7 @@
                         <div class="rota-icon"><i data-lucide="package" size="22"></i></div>
                         <div class="rota-info">
                             <h5>Rota #8829</h5>
-                            <p>4 pacotes • Aldeota</p>
+                            <p>4 pacotes • Fortaleza</p>
                         </div>
                         <span class="status-pill pill-em-rota">Em rota</span>
                     </div>
