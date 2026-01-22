@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=0">
-    <title>Flexa - App (teste9 - Atualizado)</title>
+    <title>Flexa - App</title>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;900&display=swap" rel="stylesheet">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
@@ -436,7 +436,7 @@
         </div>
     </div>
 
-    <button class="btn-main" onclick="confirmarEnvioFinal()" style="background:#10b981;">
+    <button class="btn-main" onclick="confirmarEnvioFinal()" style="background:var(--brand-orange);">
         Criar Envio
     </button>
     <p style="text-align:center; margin-top:20px; font-size:14px; color:var(--text-sub); font-weight:700; cursor:pointer;" onclick="voltarParaPasso(2)">Ajustar detalhes</p>
@@ -460,14 +460,23 @@
         lucide.createIcons();
 
         function navegar(idTela) {
-            document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-            document.getElementById(idTela).classList.add('active');
-            const nav = document.getElementById('main-nav');
-            if(['view-dash-loja', 'view-novo-envio'].includes(idTela)) nav.style.display = 'flex';
-            else nav.style.display = 'none';
-            if(idTela === 'view-novo-envio') voltarParaPasso(1);
-            window.scrollTo(0,0);
-        }
+    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+    document.getElementById(idTela).classList.add('active');
+    
+    // Se sair da tela de envio, garante que os passos internos voltem ao padrão
+    if (idTela !== 'view-novo-envio') {
+        document.getElementById('envio-p1').classList.remove('hidden');
+        document.getElementById('envio-p2').classList.add('hidden');
+        if(document.getElementById('envio-p3')) document.getElementById('envio-p3').classList.add('hidden');
+        if(document.getElementById('envio-p4')) document.getElementById('envio-p4').classList.add('hidden');
+    }
+
+    const nav = document.getElementById('main-nav');
+    if(['view-dash-loja', 'view-novo-envio'].includes(idTela)) nav.style.display = 'flex';
+    else nav.style.display = 'none';
+    
+    window.scrollTo(0,0);
+}
 
         function irParaCadastro(tipo) {
             navegar('view-auth');
@@ -501,16 +510,18 @@
 }
 
 function voltarParaPasso(p) {
-    // Esconde todos os passos de envio
+    // Esconde absolutamente todos os passos possíveis de envio
     document.getElementById('envio-p1').classList.add('hidden');
     document.getElementById('envio-p2').classList.add('hidden');
     if(document.getElementById('envio-p3')) document.getElementById('envio-p3').classList.add('hidden');
+    if(document.getElementById('envio-p4')) document.getElementById('envio-p4').classList.add('hidden');
 
     const destino = document.getElementById('envio-p' + p);
     destino.classList.remove('hidden');
-    destino.classList.add('fade-step'); // Aplica suavidade ao voltar também
+    destino.classList.add('fade-step'); 
 
     setTimeout(() => destino.classList.remove('fade-step'), 400);
+    window.scrollTo(0,0);
 }
 
         function selecionarServico(tipo) {
