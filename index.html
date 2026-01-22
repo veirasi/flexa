@@ -406,9 +406,41 @@
                     <div class="info-item"><label>Tempo Est.</label><p>18 min</p></div>
                 </div>
 
-                <button class="btn-main" onclick="alert('Envio Revisado!')">Revisar Envio</button>
+                <button class="btn-main" onclick="irParaRevisao()"">Revisar Envio</button>
                 <p style="text-align:center; margin-top:20px; font-size:14px; color:var(--text-sub); font-weight:700; cursor:pointer;" onclick="navegar('view-dash-loja')">← Cancelar</p>
             </div>
+<div id="envio-p4" class="hidden">
+    <div style="display:flex; align-items:center; gap:15px; margin-bottom:25px;">
+        <i data-lucide="arrow-left" size="24" onclick="voltarParaPasso(2)" style="cursor:pointer"></i>
+        <h2 class="screen-title">Revisar Envio</h2>
+    </div>
+
+    <div class="destinatario-card" style="border: 2px solid var(--brand-orange); background: #fffaf5;">
+        <span class="destinatario-label">Destino</span>
+        <strong class="destinatario-nome" id="rev-nome">Maria Silva</strong>
+        <span class="destinatario-info" id="rev-end">Rua das Flores, 123</span>
+    </div>
+
+    <div style="background: white; padding: 20px; border-radius: 24px; margin-bottom: 20px; border: 1px solid var(--border-color);">
+        <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+            <span style="color:var(--text-sub); font-weight:600;">Serviço</span>
+            <strong id="rev-servico">Standard</strong>
+        </div>
+        <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+            <span style="color:var(--text-sub); font-weight:600;">Tamanho</span>
+            <strong id="rev-tamanho">Pacote P</strong>
+        </div>
+        <div style="display:flex; justify-content:space-between; padding-top:15px; border-top:1px dashed #e2e8f0;">
+            <span style="color:var(--text-main); font-weight:800;">Total do Frete</span>
+            <strong style="color:var(--brand-orange); font-size:20px;">R$ 12,50</strong>
+        </div>
+    </div>
+
+    <button class="btn-main" onclick="confirmarEnvioFinal()" style="background:#10b981;">
+        Criar Envio
+    </button>
+    <p style="text-align:center; margin-top:20px; font-size:14px; color:var(--text-sub); font-weight:700; cursor:pointer;" onclick="voltarParaPasso(2)">Ajustar detalhes</p>
+</div>
         </section>
 
     </div>
@@ -511,6 +543,35 @@ function voltarParaPasso(p) {
                 tEnt.classList.add('active'); tCad.classList.remove('active');
             }
         }
+function irParaRevisao() {
+    // 1. Captura os dados das variáveis ou campos
+    const nome = document.getElementById('card-nome').innerText;
+    const endereco = document.getElementById('card-endereco').innerText;
+    
+    // 2. Tenta pegar o serviço e tamanho ativo
+    const servico = document.querySelector('#envio-p2 .select-box.active strong').innerText;
+    const tamanho = document.querySelectorAll('#envio-p2 .selection-grid-3 .select-box.active strong')[0].innerText;
+
+    // 3. Alimenta a tela de revisão
+    document.getElementById('rev-nome').innerText = nome;
+    document.getElementById('rev-end').innerText = endereco;
+    document.getElementById('rev-servico').innerText = servico;
+    document.getElementById('rev-tamanho').innerText = "Pacote " + tamanho;
+
+    // 4. Troca de tela com animação
+    document.getElementById('envio-p2').classList.add('hidden');
+    const p4 = document.getElementById('envio-p4');
+    p4.classList.remove('hidden');
+    p4.classList.add('fade-step');
+    
+    window.scrollTo(0,0);
+    lucide.createIcons();
+}
+
+function confirmarEnvioFinal() {
+    alert("🚀 Pedido enviado com sucesso! Um entregador será notificado.");
+    navegar('view-dash-loja');
+}
 
         function simularLogin() {
             navegar('view-dash-loja');
