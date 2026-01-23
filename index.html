@@ -339,10 +339,69 @@
                 </div>
 
                 <div style="margin-top: 40px;">
-                    <button class="btn-outline">+ Novo Cliente</button>
+                    <button class="btn-outline" onclick="abrirNovoCliente()" style="height: 62px; font-size: 16px;">
+    + Novo Cliente
+</button>
                     <p style="text-align:center; margin-top:20px; font-size:14px; color:var(--text-sub); font-weight:700; cursor:pointer;" onclick="navegar('view-dash-loja')">← Voltar</p>
                 </div>
             </div>
+<div id="envio-p3" class="hidden">
+    <div style="display:flex; align-items:center; gap:15px; margin-bottom:25px;">
+        <i data-lucide="arrow-left" size="24" onclick="voltarParaPasso(1)" style="cursor:pointer"></i>
+        <h2 class="screen-title">Novo Cliente</h2>
+    </div>
+
+    <div class="form-group" style="margin-bottom: 15px;">
+        <label>Nome do Cliente</label>
+        <div class="input-wrapper">
+            <i data-lucide="user" size="20"></i>
+            <input type="text" id="new-cli-nome" placeholder="Nome completo">
+        </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom: 15px;">
+        <label>WhatsApp</label>
+        <div class="input-wrapper">
+            <i data-lucide="phone" size="20"></i>
+            <input type="tel" id="new-cli-tel" placeholder="(00) 00000-0000">
+        </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom: 15px;">
+        <label>CEP</label>
+        <div class="input-wrapper">
+            <i data-lucide="map" size="20"></i>
+            <input type="text" id="new-cli-cep" placeholder="00000-000">
+        </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom: 15px;">
+        <label>Endereço Completo</label>
+        <div class="input-wrapper">
+            <i data-lucide="map-pin" size="20"></i>
+            <input type="text" id="new-cli-end" placeholder="Rua, número, bairro">
+        </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom: 15px;">
+        <label>Complemento</label>
+        <div class="input-wrapper">
+            <i data-lucide="home" size="20"></i>
+            <input type="text" id="new-cli-comp" placeholder="Apt / Bloco">
+        </div>
+    </div>
+
+    <div class="form-group" style="margin-bottom: 25px;">
+        <label>Observação (Opcional)</label>
+        <div class="input-wrapper">
+            <i data-lucide="sticky-note" size="20"></i>
+            <input type="text" id="new-cli-obs" placeholder="Ex: Portão azul, campainha estragada">
+        </div>
+    </div>
+
+    <button class="btn-main" onclick="salvarNovoCliente()">Salvar e Continuar</button>
+    <p style="text-align:center; margin-top:20px; font-size:14px; color:var(--text-sub); font-weight:700; cursor:pointer;" onclick="voltarParaPasso(1)">Cancelar</p>
+</div>
 
             <div id="envio-p2" class="hidden">
                 <div style="display:flex; align-items:center; gap:15px; margin-bottom:25px;">
@@ -381,7 +440,7 @@
                     </div>
                     <div class="select-box" id="srv-flash" onclick="selecionarServico('Flash')">
                         <i data-lucide="zap" size="24"></i>
-                        <strong>Expresso</strong>
+                        <strong>Flash</strong>
                         <span>Até 2h</span>
                     </div>
                 </div>
@@ -407,7 +466,7 @@
                     <div class="info-item"><label>Tempo Est.</label><p>18 min</p></div>
                 </div>
 
-                <button class="btn-main" onclick="irParaRevisao()"">Revisar</button>
+                <button class="btn-main" onclick="irParaRevisao()"">Revisar Envio</button>
                 <p style="text-align:center; margin-top:20px; font-size:14px; color:var(--text-sub); font-weight:700; cursor:pointer;" onclick="navegar('view-dash-loja')">← Cancelar</p>
             </div>
 <div id="envio-p4" class="hidden">
@@ -442,6 +501,24 @@
     </button>
     <p style="text-align:center; margin-top:20px; font-size:14px; color:var(--text-sub); font-weight:700; cursor:pointer;" onclick="voltarParaPasso(2)">Ajustar detalhes</p>
 </div>
+<div id="envio-p5" class="hidden" style="text-align: center; padding-top: 50px;">
+    <div style="width: 100px; height: 100px; background: #10b981; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 30px; box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3);">
+        <i data-lucide="check" size="50" style="color: white;"></i>
+    </div>
+    
+    <h2 class="screen-title" style="margin-bottom: 10px;">Pedido Solicitado!</h2>
+    <p style="color: var(--text-sub); margin-bottom: 40px; padding: 0 20px;">
+        O motorista mais próximo já foi notificado e está a caminho para a coleta.
+    </p>
+
+    <div style="background: #f8fafc; border-radius: 20px; padding: 20px; margin-bottom: 40px; border: 1px solid var(--border-color);">
+        <span style="display:block; font-size:12px; color:var(--text-sub); text-transform:uppercase; font-weight:700; margin-bottom:5px;">Código do Pedido</span>
+        <strong style="font-size:20px; color:var(--text-main);">#FX-8829</strong>
+    </div>
+
+    <button class="btn-main" onclick="navegar('view-dash-loja')">Voltar para o Início</button>
+</div>
+
         </section>
 
     </div>
@@ -461,23 +538,31 @@
         lucide.createIcons();
 
         function navegar(idTela) {
+    // Remove o 'active' de todas as views e coloca na selecionada
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById(idTela).classList.add('active');
     
-    // Se sair da tela de envio, garante que os passos internos voltem ao padrão
+    // LIMPEZA: Se sair da tela de novo envio, esconde todos os passos internos
     if (idTela !== 'view-novo-envio') {
+        // Lista de todos os seus passos de envio
+        const passos = ['envio-p1', 'envio-p2', 'envio-p3', 'envio-p4', 'envio-p5'];
+        passos.forEach(id => {
+            const el = document.getElementById(id);
+            if(el) el.classList.add('hidden');
+        });
+        
+        // Garante que, ao voltar para 'Novo Envio', comece do P1
         document.getElementById('envio-p1').classList.remove('hidden');
-        document.getElementById('envio-p2').classList.add('hidden');
-        if(document.getElementById('envio-p3')) document.getElementById('envio-p3').classList.add('hidden');
-        if(document.getElementById('envio-p4')) document.getElementById('envio-p4').classList.add('hidden');
     }
 
+    // Controle do menu inferior
     const nav = document.getElementById('main-nav');
     if(['view-dash-loja', 'view-novo-envio'].includes(idTela)) nav.style.display = 'flex';
     else nav.style.display = 'none';
     
     window.scrollTo(0,0);
 }
+
 
         function irParaCadastro(tipo) {
             navegar('view-auth');
@@ -511,17 +596,20 @@
 }
 
 function voltarParaPasso(p) {
-    // Esconde absolutamente todos os passos possíveis de envio
-    document.getElementById('envio-p1').classList.add('hidden');
-    document.getElementById('envio-p2').classList.add('hidden');
-    if(document.getElementById('envio-p3')) document.getElementById('envio-p3').classList.add('hidden');
-    if(document.getElementById('envio-p4')) document.getElementById('envio-p4').classList.add('hidden');
+    // Esconde absolutamente todos os passos de envio para não encavalar
+    const todosPassos = ['envio-p1', 'envio-p2', 'envio-p3', 'envio-p4', 'envio-p5'];
+    todosPassos.forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.classList.add('hidden');
+    });
 
+    // Mostra apenas o destino solicitado
     const destino = document.getElementById('envio-p' + p);
-    destino.classList.remove('hidden');
-    destino.classList.add('fade-step'); 
-
-    setTimeout(() => destino.classList.remove('fade-step'), 400);
+    if(destino) {
+        destino.classList.remove('hidden');
+        destino.classList.add('fade-step'); 
+        setTimeout(() => destino.classList.remove('fade-step'), 400);
+    }
     window.scrollTo(0,0);
 }
 
@@ -581,9 +669,56 @@ function irParaRevisao() {
 }
 
 function confirmarEnvioFinal() {
-    alert("🚀 Pedido enviado com sucesso! Um entregador será notificado.");
-    navegar('view-dash-loja');
+    // Esconde a revisão
+    document.getElementById('envio-p4').classList.add('hidden');
+    
+    // Mostra o sucesso
+    const p5 = document.getElementById('envio-p5');
+    p5.classList.remove('hidden');
+    p5.classList.add('fade-step');
+    
+    window.scrollTo(0,0);
+    lucide.createIcons();
 }
+
+function abrirNovoCliente() {
+    document.getElementById('envio-p1').classList.add('hidden');
+    const p3 = document.getElementById('envio-p3');
+    p3.classList.remove('hidden');
+    p3.classList.add('fade-step');
+    window.scrollTo(0,0);
+    lucide.createIcons();
+}
+
+function salvarNovoCliente() {
+    const nome = document.getElementById('new-cli-nome').value;
+    const end = document.getElementById('new-cli-end').value;
+    const tel = document.getElementById('new-cli-tel').value;
+    const comp = document.getElementById('new-cli-comp').value;
+
+    if(nome && end && tel) {
+        // Monta o endereço final com complemento se existir
+        const enderecoCompleto = comp ? `${end} - ${comp}` : end;
+        
+        // Leva os dados direto para o Card de Detalhes (Passo 2)
+        irParaPasso2(nome, enderecoCompleto, tel);
+        
+        // Esconde a tela de cadastro
+        document.getElementById('envio-p3').classList.add('hidden');
+        
+        // Limpa os campos para um próximo cadastro
+        document.getElementById('new-cli-nome').value = '';
+        document.getElementById('new-cli-end').value = '';
+        document.getElementById('new-cli-tel').value = '';
+        document.getElementById('new-cli-cep').value = '';
+        document.getElementById('new-cli-comp').value = '';
+        document.getElementById('new-cli-obs').value = '';
+    } else {
+        alert("Por favor, preencha Nome, WhatsApp e Endereço.");
+    }
+}
+
+
 
         function simularLogin() {
             navegar('view-dash-loja');
