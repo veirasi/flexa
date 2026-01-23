@@ -363,7 +363,7 @@
         <label>WhatsApp</label>
         <div class="input-wrapper">
             <i data-lucide="phone" size="20"></i>
-            <input type="tel" id="new-cli-tel" placeholder="(00) 00000-0000">
+            <input type="tel" id="new-cli-tel" placeholder="(00) 00000-0000" maxlength="15">
         </div>
     </div>
 
@@ -604,7 +604,17 @@ async function buscarEndereco() {
     }
     e.target.value = value;
 });
-
+document.getElementById('new-cli-tel').addEventListener('input', function (e) {
+    let value = e.target.value.replace(/\D/g, ''); // Remove tudo que não é número
+    
+    if (value.length <= 11) {
+        // Formato: (00) 00000-0000
+        value = value.replace(/^(\d{2})(\d)/g, '($1) $2');
+        value = value.replace(/(\d{5})(\d)/, '$1-$2');
+    }
+    
+    e.target.value = value;
+});
         function irParaCadastro(tipo) {
             navegar('view-auth');
             const groupCNH = document.getElementById('group-cnh');
