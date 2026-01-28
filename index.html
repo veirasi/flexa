@@ -31,8 +31,9 @@
         @keyframes float { from { transform: translate(0, 0); } to { transform: translate(-30px, 50px); } }
 
         .container { width: 100%; max-width: 420px; padding: 40px 25px 100px 25px; position: relative; z-index: 1; }
-        .view { display: none; width: 100%; animation: slideIn 0.4s ease-out; }
-        .view.active { display: block; }
+        .view { display: none !important; width: 100%; animation: slideIn 0.4s ease-out; }
+        .view.active { display: block !important; }
+
         @keyframes slideIn { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
 
         .skeleton { 
@@ -82,14 +83,72 @@
         .grid-stats { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px; }
         .stat-card { background: white; padding: 20px; border-radius: 24px; border: 1px solid var(--border-color); }
 
-        .bottom-nav { 
-            position: fixed; bottom: 0; left: 50%; transform: translateX(-50%); width: 100%; max-width: 420px; 
-            background: #00bcd4; display: none; justify-content: space-around; padding: 10px 10px 30px 10px; 
-            z-index: 1000; border-radius: 20px 20px 0 0; box-shadow: 0 -5px 20px rgba(0,0,0,0.05);
-        }
-        .nav-item { display: flex; flex-direction: column; align-items: center; gap: 4px; color: #ffffff; cursor: pointer; font-size: 11px; font-weight: 700; }
-        .nav-fab { background: var(--brand-orange); width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin-top: -35px; border: 4px solid white; box-shadow: 0 8px 20px rgba(245,130,32,0.3); 
-       }
+        /* MENU INFERIOR SUSPENSO - PRETO E ARREDONDADO */
+#main-nav {
+    position: fixed;
+    bottom: 25px; /* Afastado da base */
+    left: 20px;   /* Afastado da esquerda */
+    right: 20px;  /* Afastado da direita */
+    height: 70px;
+    background: #000000; /* Fundo Preto */
+    display: none; /* Garanta que o JS mude para flex quando logado */
+    align-items: center;
+    justify-content: space-around;
+    border-radius: 25px; /* Bordas bem arredondadas */
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    padding: 0 10px;
+    z-index: 9999;
+}
+
+/* Ícones não ativos (Brancos Vazados) */
+.nav-item {
+    color: #FFFFFF;
+    text-decoration: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    opacity: 0.6; /* Efeito de vazado/suave */
+    transition: all 0.2s ease;
+}
+
+.nav-item i {
+    stroke-width: 1.5px; /* Deixa o ícone mais fino/vazado */
+}
+
+/* Ícone ativo (Branco Preenchido) */
+.nav-item.active {
+    color: #FFFFFF;
+    opacity: 1;
+}
+
+.nav-item.active i {
+    stroke-width: 2.5px; /* Simula o preenchimento/destaque */
+}
+
+.nav-item span {
+    font-size: 10px;
+    font-weight: 600;
+}
+
+/* Botão + Envio em Destaque */
+.nav-center-plus {
+    background: #FFFFFF; /* Fundo Branco */
+    width: 50px;
+    height: 50px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 3px solid var(--brand-orange); /* Borda Laranja */
+    transform: translateY(-1px); /* Levemente para cima */
+    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
+}
+
+.nav-center-plus i {
+    color: #000000 !important; /* + em Preto */
+}
+
 
         .hidden { display: none !important; }
         /* ADICIONE ISTO AQUI */
@@ -387,17 +446,191 @@
 .checkbox-envio.selected { border-color: var(--brand-orange); background: #fffaf5; }
 .badge-flash { background: #fee2e2; color: #ef4444; font-size: 10px; padding: 2px 8px; border-radius: 8px; font-weight: 800; }
 
+.header-perfil { padding: 20px; text-align: center; border-bottom: 1px solid #eee; }
+.perfil-container { padding: 20px; }
+
+.logo-upload-section { text-align: center; margin-bottom: 30px; }
+.logo-wrapper { 
+    width: 120px; height: 120px; border-radius: 50%; border: 4px solid var(--brand-orange);
+    margin: 0 auto 15px; position: relative; overflow: hidden; cursor: pointer;
+}
+.logo-wrapper img { width: 100%; height: 100%; object-fit: cover; }
+.edit-overlay { 
+    position: absolute; bottom: 0; width: 100%; background: rgba(0,0,0,0.5); 
+    color: white; padding: 5px 0; font-size: 10px;
+}
+
+.perfil-menu { display: flex; flex-direction: column; gap: 15px; }
+.menu-item { 
+    display: flex; align-items: center; padding: 15px; background: #f9f9f9; 
+    border-radius: 12px; transition: 0.2s; cursor: pointer;
+}
+.menu-item:active { transform: scale(0.98); background: #f0f0f0; }
+.menu-icon { width: 40px; color: var(--brand-orange); }
+.menu-text { flex: 1; display: flex; flex-direction: column; }
+.menu-text strong { font-size: 14px; }
+.menu-text span { font-size: 12px; color: #888; }
+
+.btn-logout { 
+    /* Seus estilos originais mantidos */
+    margin-top: 20px; 
+    background: #fff; 
+    color: #ff4444; 
+    border: 1px solid #ff4444;
+    padding: 15px; 
+    border-radius: 12px; 
+    display: flex; 
+    align-items: center; 
+    justify-content: center; 
+    gap: 10px; 
+    font-weight: 700;
+    
+    /* Adições para funcionalidade e toque */
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+/* Adicione este bloco novo logo abaixo para o efeito visual ao passar o mouse */
+.btn-logout:hover {
+    background: #fff5f5;
+    transform: translateY(-2px);
+}
+
+
+#view-perfil {
+    padding-bottom: 120px; /* Espaço para não ficar atrás da bottom-nav */
+}
+
+.logo-wrapper {
+    width: 110px;
+    height: 110px;
+    border-radius: 50%;
+    border: 3px solid var(--brand-orange);
+    margin: 20px auto 15px;
+    position: relative;
+    overflow: hidden;
+    background: #eee;
+}
+
+.logo-wrapper img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+}
+
+/* Adicione isso ao final do seu <style> */
+.modal-sheet.show { transform: translateY(0) !important; }
+/* Container que permite o alinhamento total */
+.filter-container {
+    width: 100%;
+    overflow: hidden; /* Esconde o que sobrar */
+    padding: 10px 0 20px 0;
+}
+
+/* A linha de botões que desliza */
+.filter-scroll {
+    display: flex;
+    gap: 12px;
+    overflow-x: auto; /* Ativa o scroll horizontal */
+    padding: 0 5px; /* Pequeno respiro nas laterais */
+    
+    /* Remove as barras de rolagem visíveis para ficar limpo */
+    scrollbar-width: none; 
+    -webkit-overflow-scrolling: touch; 
+}
+
+.filter-scroll::-webkit-scrollbar {
+    display: none;
+}
+
+/* O Chip (Botão) */
+.chip {
+    flex-shrink: 0; /* CRUCIAL: impede o botão de amassar no mobile */
+    white-space: nowrap; /* Impede o texto de quebrar linha */
+    padding: 10px 20px;
+    background: white;
+    border-radius: 100px;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--text-sub);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.03);
+    border: 1px solid #f1f5f9;
+}
+
+/* Mantém o destaque do primeiro botão como no seu código */
+.chip.active {
+    background: var(--dark);
+    color: white;
+}
+
+/* ESTILOS DA TELA DE SPLASH */
+#splash-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: #ffffff;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    z-index: 20000; /* Fica acima de tudo */
+    transition: opacity 0.5s ease;
+}
+
+.logo-splash {
+    width: 160px; /* Ajuste o tamanho conforme desejar */
+    height: auto;
+    margin-bottom: 30px;
+    animation: fadeInScale 0.8s ease-out forwards, pulse 2s infinite ease-in-out 0.8s;
+    opacity: 0;
+}
+
+.loader-splash {
+    width: 35px;
+    height: 35px;
+    border: 3px solid #f1f5f9;
+    border-top: 3px solid var(--brand-orange);
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+}
+
+/* ANIMAÇÕES */
+@keyframes fadeInScale {
+    from { opacity: 0; transform: scale(0.9); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes pulse {
+    0% { transform: scale(1); }
+    50% { transform: scale(1.05); }
+    100% { transform: scale(1); }
+}
+
+@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+}
 
  </style>
 </head>
 <body>
+
+<div id="splash-screen">
+    <img src="img/logo.svg" alt="Flexa Logo" class="logo-splash">
+    
+</div>
 
     <div class="bg-sphere sphere-1"></div>
     <div class="bg-sphere sphere-2"></div>
 
     <div class="container">
         
-        <section id="view-inicio" class="view active">
+        <section id="view-inicio" class="view">
             <div class="welcome-text">
                 <h1>FLEX<span>A</span></h1>
                 <p>O futuro da sua logística está aqui.</p>
@@ -481,341 +714,438 @@
         </section>
 
         <section id="view-novo-envio" class="view">
-            <div id="envio-p1">
-                <h2 style="font-size: 24px; font-weight: 900; margin-bottom: 30px; letter-spacing: -1px;">Para quem enviar?</h2>
+
+    <div id="envio-p1">
+        <h2 style="font-size: 24px; font-weight: 900; margin-bottom: 30px; letter-spacing: -1px;">Para quem enviar?</h2>
+        
+        <div class="form-group">
+            <label>WhatsApp do Cliente</label>
+            <div class="input-wrapper">
+                <i data-lucide="search" size="20" style="color:#94a3b8"></i>
+                <input type="tel" placeholder="Buscar por número...">
+            </div>
+        </div>
+
+        <span style="font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 15px; display: block;">Clientes Frequentes</span>
+
+        <div class="swipe-container" id="container-maria">
+            <div class="swipe-action-delete">
+                <i data-lucide="trash-2" size="20"></i>
+                <span>Excluir</span>
+            </div>
+            
+            <div class="cliente-card-simples" 
+                 id="card-maria"
+                 onclick="irParaPasso2('Maria Silva', 'Rua das Flores, 123 - Aldeota', '(85) 99876-5432')"
+                 ontouchstart="handleTouchStart(event)" 
+                 ontouchmove="handleTouchMove(event)" 
+                 ontouchend="handleTouchEnd(event)"
+                 style="position: relative; z-index: 2; margin-bottom: 0 !important;">
+                 
+                <span class="badge-freq">Frequente</span>
+                <strong style="font-size: 17px; font-weight: 800; display: block; margin-bottom: 2px;">Maria Silva</strong>
+                <span style="font-size: 14px; color: #64748b; display: block;">Rua das Flores, 123 - Aldeota</span>
                 
-                <div class="form-group">
-                    <label>WhatsApp do Cliente</label>
+                <span style="color: var(--brand-orange); font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; margin-top: 6px;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 448 512" fill="currentColor"><path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.1 0-65.6-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-5.5-2.8-23.2-8.5-44.2-27.1-16.4-14.6-27.4-32.7-30.6-38.2-3.2-5.6-.3-8.6 2.5-11.3 2.5-2.5 5.6-6.5 8.3-9.7 2.8-3.3 3.7-5.6 5.6-9.3 1.9-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 13.2 5.8 23.5 9.2 31.5 11.8 13.3 4.2 25.4 3.6 35 2.2 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"/></svg>
+                    (85) 99876-5432
+                </span>
+            </div>
+        </div>
+
+        <div style="margin-top: 40px;">
+            <button class="btn-outline" onclick="abrirNovoCliente()" style="height: 62px; font-size: 16px;">
+                + Novo Cliente
+            </button>
+            <p style="text-align:center; margin-top:20px; font-size:14px; color:var(--text-sub); font-weight:700; cursor:pointer;" onclick="navegar('view-dash-loja')">← Voltar</p>
+        </div>
+    </div> <div id="envio-p2" class="hidden">
+        <div style="display:flex; align-items:center; gap:15px; margin-bottom:25px;">
+            <i data-lucide="arrow-left" size="24" onclick="voltarParaPasso(1)" style="cursor:pointer"></i>
+            <h2 class="screen-title">Detalhes do Envio</h2>
+        </div>
+
+        <div class="destinatario-card">
+            <span class="destinatario-label">Destinatário</span>
+            <strong class="destinatario-nome" id="card-nome">---</strong>
+            <span class="destinatario-info" id="card-endereco">---</span>
+            <span style="color: var(--brand-orange); font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; margin-top: 6px;">
+                <i data-lucide="phone" size="14"></i>
+                <span id="card-whatsapp">---</span>
+            </span>
+        </div>
+
+<div class="form-group">
+                    <span class="section-title">O que está enviando?</span>
                     <div class="input-wrapper">
-                        <i data-lucide="search" size="20" style="color:#94a3b8"></i>
-                        <input type="tel" placeholder="Buscar por número...">
+                        <input type="text" id="input-desc" placeholder="Ex: 2 camisas e 1 calça">
                     </div>
                 </div>
 
-                <span style="font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; margin-bottom: 15px; display: block;">Clientes Frequentes</span>
-
-                                    <div class="swipe-container" id="container-maria">
-                        <div class="swipe-action-delete">
-                            <i data-lucide="trash-2" size="20"></i>
-                            <span>Excluir</span>
-                        </div>
-                        
-                        <div class="cliente-card-simples" 
-                             id="card-maria"
-                             onclick="irParaPasso2('Maria Silva', 'Rua das Flores, 123 - Aldeota', '(85) 99876-5432')"
-                             ontouchstart="handleTouchStart(event)" 
-                             ontouchmove="handleTouchMove(event)" 
-                             ontouchend="handleTouchEnd(event)"
-                             style="position: relative; z-index: 2; margin-bottom: 0 !important;">
-                             
-                            <span class="badge-freq">Frequente</span>
-                            <strong style="font-size: 17px; font-weight: 800; display: block; margin-bottom: 2px;">Maria Silva</strong>
-                            <span style="font-size: 14px; color: #64748b; display: block;">Rua das Flores, 123 - Aldeota</span>
-                            
-                            <span style="color: var(--brand-orange); font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; margin-top: 6px;">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 448 512" fill="currentColor"><path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.1 0-65.6-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-5.5-2.8-23.2-8.5-44.2-27.1-16.4-14.6-27.4-32.7-30.6-38.2-3.2-5.6-.3-8.6 2.5-11.3 2.5-2.5 5.6-6.5 8.3-9.7 2.8-3.3 3.7-5.6 5.6-9.3 1.9-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 13.2 5.8 23.5 9.2 31.5 11.8 13.3 4.2 25.4 3.6 35 2.2 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"/></svg>
-                                (85) 99876-5432
-                            </span>
-                        </div>
+                <div class="form-group">
+                    <span class="section-title">Valor Total (R$)</span>
+                    <div class="input-wrapper">
+                        <span style="font-size: 20px; font-weight: 400; color: #0f172a; margin-right: 5px;">R$</span>
+                        <input type="number" id="input-valor" placeholder="150,00">
                     </div>
+                </div>
 
+        <span class="section-title">Tipo de Serviço</span>
+        <div class="selection-grid">
+            <div class="select-box active" id="srv-std" onclick="selecionarServico('Standard')">
+                <i data-lucide="truck" size="24"></i>
+                <strong>Standard</strong>
+                <span>Até 24h</span>
+            </div>
+            <div class="select-box" id="srv-flash" onclick="selecionarServico('Flash')">
+                <i data-lucide="zap" size="24"></i>
+                <strong>Flash</strong>
+                <span>Até 2h</span>
+            </div>
+        </div>
 
-                <div style="margin-top: 40px;">
-                    <button class="btn-outline" onclick="abrirNovoCliente()" style="height: 62px; font-size: 16px;">
-    + Novo Cliente
-</button>
-                    <p style="text-align:center; margin-top:20px; font-size:14px; color:var(--text-sub); font-weight:700; cursor:pointer;" onclick="navegar('view-dash-loja')">← Voltar</p>
+        <span class="section-title">Tamanho do Volume</span>
+        <div class="selection-grid-3">
+            <div class="select-box active" id="sz-p" onclick="selecionarTamanho('P')">
+                <strong>P</strong>
+                <span>Até 2kg</span>
+            </div>
+            <div class="select-box" id="sz-m" onclick="selecionarTamanho('M')">
+                <strong>M</strong>
+                <span>Até 5kg</span>
+            </div>
+            <div class="select-box" id="sz-g" onclick="selecionarTamanho('G')">
+                <strong>G</strong>
+                <span>Até 10kg</span>
+            </div>
+        </div>
+
+        <button class="btn-main" onclick="irParaVeiculos()">Opções de envio</button>
+    </div> <div id="envio-p3" class="hidden">
+        <div style="display:flex; align-items:center; gap:15px; margin-bottom:25px;">
+            <i data-lucide="arrow-left" size="24" onclick="voltarParaPasso(1)" style="cursor:pointer"></i>
+            <h2 class="screen-title">Novo Cliente</h2>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 15px;">
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Nome do Cliente</label>
+                <div class="input-wrapper"><i data-lucide="user" size="20"></i><input type="text" id="new-cli-nome" placeholder="Nome completo"></div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>WhatsApp</label>
+                <div class="input-wrapper"><i data-lucide="phone" size="20"></i><input type="tel" id="new-cli-tel" placeholder="(00) 00000-0000" maxlength="15"></div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>CEP</label>
+                <div style="display: flex; gap: 8px;">
+                    <div class="input-wrapper" style="flex: 1;"><i data-lucide="map" size="20"></i><input type="text" id="new-cli-cep" placeholder="00000-000" maxlength="9"></div>
+                    <button onclick="buscarEndereco()" style="background: var(--brand-orange); color: white; border: none; border-radius: 16px; width: 60px; display: flex; align-items: center; justify-content: center;"><i data-lucide="search"></i></button>
                 </div>
             </div>
-<div id="envio-p2" class="hidden">
-    <div style="display:flex; align-items:center; gap:15px; margin-bottom:25px;">
-        <i data-lucide="arrow-left" size="24" onclick="voltarParaPasso(1)" style="cursor:pointer"></i>
-        <h2 class="screen-title">Detalhes do Envio</h2>
-    </div>
 
-    <div class="destinatario-card">
-        <span class="destinatario-label">Destinatário</span>
-        <strong class="destinatario-nome" id="card-nome">---</strong>
-        <span class="destinatario-info" id="card-endereco">---</span>
-        <span style="color: var(--brand-orange); font-size: 13px; font-weight: 700; display: flex; align-items: center; gap: 6px; margin-top: 6px;">
-            <i data-lucide="phone" size="14"></i>
-            <span id="card-whatsapp">---</span>
-        </span>
-    </div>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Rua / Logradouro</label>
+                <div class="input-wrapper"><input type="text" id="new-cli-rua" placeholder="Ex: Av. Paulista"></div>
+            </div>
 
-    <span class="section-title">Tipo de Serviço</span>
-    <div class="selection-grid">
-        <div class="select-box active" id="srv-std" onclick="selecionarServico('Standard')">
-            <i data-lucide="truck" size="24"></i>
-            <strong>Standard</strong>
-            <span>Até 24h</span>
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Número</label>
+                <div class="input-wrapper"><input type="text" id="new-cli-num" placeholder="Ex: 123 ou S/N"></div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Bairro</label>
+                <div class="input-wrapper"><input type="text" id="new-cli-bairro" placeholder="Digite o bairro"></div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Cidade</label>
+                <div class="input-wrapper" style="background: #f8fafc;"><input type="text" id="new-cli-cidade" placeholder="Cidade" readonly></div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Estado (UF)</label>
+                <div class="input-wrapper" style="background: #f8fafc;"><input type="text" id="new-cli-estado" placeholder="UF" readonly></div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 0;">
+                <label>Complemento</label>
+                <div class="input-wrapper"><input type="text" id="new-cli-comp" placeholder="Apto, Bloco, Sala..."></div>
+            </div>
+
+            <div class="form-group" style="margin-bottom: 10px;">
+                <label>Observação (Opcional)</label>
+                <div class="input-wrapper"><input type="text" id="new-cli-obs" placeholder="Ex: Próximo ao mercado"></div>
+            </div>
         </div>
-        <div class="select-box" id="srv-flash" onclick="selecionarServico('Flash')">
-            <i data-lucide="zap" size="24"></i>
-            <strong>Flash</strong>
-            <span>Até 2h</span>
+
+        <button class="btn-main" onclick="salvarNovoCliente()" style="margin-top: 10px;">Salvar e Continuar</button>
+        <p style="text-align:center; margin-top:20px; font-size:14px; color:var(--text-sub); font-weight:700; cursor:pointer;" onclick="voltarParaPasso(1)">Cancelar</p>
+    </div> <div id="envio-v-veiculo" class="hidden">
+        <div style="display:flex; align-items:center; gap:15px; margin-bottom:25px;">
+            <i data-lucide="arrow-left" size="24" onclick="voltarParaPasso(2)" style="cursor:pointer"></i>
+            <h2 class="screen-title">Escolha o transporte</h2>
         </div>
-    </div>
 
-    <span class="section-title">Tamanho do Volume</span>
-    <div class="selection-grid-3">
-        <div class="select-box active" id="sz-p" onclick="selecionarTamanho('P')">
-            <strong>P</strong>
-            <span>Até 2kg</span>
+        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 30px;">
+            <div class="veiculo-item" id="v-patinete" onclick="selecionarVeiculo('Patinete', 'R$ 6,50')">
+                <div class="veiculo-icon"><i data-lucide="toy-brick"></i></div>
+                <div class="veiculo-info">
+                    <strong>Patinete Flexa</strong>
+                    <span>Até 1kg • 20x20x10cm</span>
+                </div>
+                <div class="veiculo-preco">R$ 6,50</div>
+            </div>
+
+            <div class="veiculo-item" id="v-bike" onclick="selecionarVeiculo('Bicicleta', 'R$ 8,90')">
+                <div class="veiculo-icon"><i data-lucide="bike"></i></div>
+                <div class="veiculo-info">
+                    <strong>Bicicleta</strong>
+                    <span>Até 3kg • 30x30x20cm</span>
+                </div>
+                <div class="veiculo-preco">R$ 8,90</div>
+            </div>
+
+            <div class="veiculo-item active" id="v-moto" onclick="selecionarVeiculo('Moto', 'R$ 12,50')">
+                <div class="veiculo-icon"><i data-lucide="motorcycle"></i></div>
+                <div class="veiculo-info">
+                    <strong>Moto Flexa</strong>
+                    <span>Até 10kg • 40x40x40cm</span>
+                </div>
+                <div class="veiculo-preco">R$ 12,50</div>
+            </div>
+
+            <div class="veiculo-item" id="v-carro" onclick="selecionarVeiculo('Carro', 'R$ 18,00')">
+                <div class="veiculo-icon"><i data-lucide="car"></i></div>
+                <div class="veiculo-info">
+                    <strong>Carro</strong>
+                    <span>Até 50kg • Porta-malas</span>
+                </div>
+                <div class="veiculo-preco">R$ 18,00</div>
+            </div>
+
+            <div class="veiculo-item" id="v-van" onclick="selecionarVeiculo('Van', 'R$ 45,00')">
+                <div class="veiculo-icon"><i data-lucide="truck"></i></div>
+                <div class="veiculo-info">
+                    <strong>Flexa Van</strong>
+                    <span>Até 200kg • Grandes volumes</span>
+                </div>
+                <div class="veiculo-preco">R$ 45,00</div>
+            </div>
         </div>
-        <div class="select-box" id="sz-m" onclick="selecionarTamanho('M')">
-            <strong>M</strong>
-            <span>Até 5kg</span>
+
+        <button class="btn-main" onclick="irParaRevisao()">Confirmar Veículo</button>
+    </div> <div id="envio-p4" class="hidden">
+        <div style="display:flex; align-items:center; gap:15px; margin-bottom:25px;">
+            <i data-lucide="arrow-left" size="24" onclick="voltarParaPasso(2)" style="cursor:pointer"></i>
+            <h2 class="screen-title">Revisar Envio</h2>
         </div>
-        <div class="select-box" id="sz-g" onclick="selecionarTamanho('G')">
-            <strong>G</strong>
-            <span>Até 10kg</span>
+
+        <div class="destinatario-card" style="border: 2px solid var(--brand-orange); background: #fffaf5;">
+            <span class="destinatario-label">Destino</span>
+            <strong class="destinatario-nome" id="rev-nome">Maria Silva</strong>
+            <span class="destinatario-info" id="rev-end">Rua das Flores, 123</span>
         </div>
-    </div>
 
-    <button class="btn-main" onclick="irParaVeiculos()">Opcões de envio</button>
-</div>
+        <div style="background: white; padding: 20px; border-radius: 24px; margin-bottom: 20px; border: 1px solid var(--border-color);">
+            <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                <span style="color:var(--text-sub); font-weight:600;">Serviço</span>
+                <strong id="rev-servico">Standard</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
+                <span style="color:var(--text-sub); font-weight:600;">Tamanho</span>
+                <strong id="rev-tamanho">Pacote P</strong>
+            </div>
+            <div style="display:flex; justify-content:space-between; padding-top:15px; border-top:1px dashed #e2e8f0;">
+                <span style="color:var(--text-main); font-weight:800;">Total do Frete</span>
+                <strong style="color:var(--brand-orange); font-size:20px;">R$ 12,50</strong>
+            </div>
+        </div>
 
-
-<div id="envio-p3" class="hidden">
-    <div style="display:flex; align-items:center; gap:15px; margin-bottom:25px;">
-        <i data-lucide="arrow-left" size="24" onclick="voltarParaPasso(1)" style="cursor:pointer"></i>
-        <h2 class="screen-title">Novo Cliente</h2>
-    </div>
-
-    <div style="display: flex; flex-direction: column; gap: 15px;">
+        <button class="btn-main" onclick="confirmarEnvioFinal()" style="background:var(--brand-orange);">
+            Criar Envio
+        </button>
+        <p style="text-align:center; margin-top:20px; font-size:14px; color:var(--text-sub); font-weight:700; cursor:pointer;" onclick="voltarParaPasso(2)">Ajustar detalhes</p>
+    </div> <div id="envio-p5" class="hidden" style="text-align: center; padding-top: 50px;">
+        <div style="width: 100px; height: 100px; background: #10b981; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 30px; box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3);">
+            <i data-lucide="check" size="50" style="color: white;"></i>
+        </div>
         
-        <div class="form-group" style="margin-bottom: 0;">
-            <label>Nome do Cliente</label>
-            <div class="input-wrapper"><i data-lucide="user" size="20"></i><input type="text" id="new-cli-nome" placeholder="Nome completo"></div>
+        <h2 class="screen-title" style="margin-bottom: 10px;">Pedido Solicitado!</h2>
+        <p style="color: var(--text-sub); margin-bottom: 40px; padding: 0 20px;">
+            O motorista mais próximo já foi notificado e está a caminho para a coleta.
+        </p>
+
+        <div style="background: #f8fafc; border-radius: 20px; padding: 20px; margin-bottom: 40px; border: 1px solid var(--border-color);">
+            <span style="display:block; font-size:12px; color:var(--text-sub); text-transform:uppercase; font-weight:700; margin-bottom:5px;">Código do Pedido</span>
+            <strong style="font-size:20px; color:var(--text-main);">#FX-8829</strong>
         </div>
 
-        <div class="form-group" style="margin-bottom: 0;">
-            <label>WhatsApp</label>
-            <div class="input-wrapper"><i data-lucide="phone" size="20"></i><input type="tel" id="new-cli-tel" placeholder="(00) 00000-0000" maxlength="15"></div>
+        <button class="btn-main" onclick="navegar('view-dash-loja')">Voltar para o Início</button>
+    </div> </section>
+	
+	<section id="view-perfil" class="view">
+    <div class="header-perfil" style="padding: 20px; margin-bottom: 20px;">
+        <h2 style="font-size: 24px; font-weight: 900; letter-spacing: -1px;">Meu Perfil</h2>
+    </div>
+
+    <div class="perfil-container" style="padding: 0 20px;">
+        <div class="logo-upload-section" style="text-align: center; margin-bottom: 30px; background: white; padding: 30px; border-radius: 24px; border: 1px solid var(--border-color);">
+            <div class="logo-wrapper" onclick="document.getElementById('file-input').click()" style="position: relative; width: 100px; height: 100px; margin: 0 auto 15px; cursor: pointer;">
+                <img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100" id="logo-perfil-display" style="width: 100%; height: 100%; border-radius: 50%; object-fit: cover; border: 3px solid var(--brand-orange);">
+                <div style="position: absolute; bottom: 0; right: 0; background: var(--brand-orange); color: white; border-radius: 50%; width: 30px; height: 30px; display: flex; align-items: center; justify-content: center; border: 2px solid white;">
+                    <i data-lucide="camera" size="16"></i>
+                </div>
+            </div>
+            <input type="file" id="file-input" style="display:none" accept="image/*" onchange="uploadLogo(this)">
+            <h3 id="perfil-nome-loja" style="font-weight: 800; font-size: 20px; margin: 0;">Nome da Loja</h3>
+            <span style="color: var(--text-sub); font-size: 14px;">Membro desde 2024</span>
         </div>
 
-        <div class="form-group" style="margin-bottom: 0;">
-            <label>CEP</label>
-            <div style="display: flex; gap: 8px;">
-                <div class="input-wrapper" style="flex: 1;"><i data-lucide="map" size="20"></i><input type="text" id="new-cli-cep" placeholder="00000-000" maxlength="9"></div>
-                <button onclick="buscarEndereco()" style="background: var(--brand-orange); color: white; border: none; border-radius: 16px; width: 60px; display: flex; align-items: center; justify-content: center;"><i data-lucide="search"></i></button>
+        <div class="perfil-menu" style="display: flex; flex-direction: column; gap: 12px;">
+            <div class="menu-item" style="background: white; padding: 18px; border-radius: 20px; display: flex; align-items: center; gap: 15px; border: 1px solid var(--border-color); cursor: pointer;">
+                <div style="background: #f1f5f9; width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--text-main);">
+                    <i data-lucide="user" size="20"></i>
+                </div>
+                <div style="flex: 1;">
+                    <strong style="display: block; font-size: 16px;">Dados da Conta</strong>
+                    <span style="font-size: 12px; color: var(--text-sub);">E-mail, CNPJ e Senha</span>
+                </div>
+                <i data-lucide="chevron-right" size="18" style="color: #cbd5e1;"></i>
+            </div>
+
+            <div class="menu-item" style="background: white; padding: 18px; border-radius: 20px; display: flex; align-items: center; gap: 15px; border: 1px solid var(--border-color); cursor: pointer;">
+                <div style="background: #f1f5f9; width: 40px; height: 40px; border-radius: 12px; display: flex; align-items: center; justify-content: center; color: var(--text-main);">
+                    <i data-lucide="credit-card" size="20"></i>
+                </div>
+                <div style="flex: 1;">
+                    <strong style="display: block; font-size: 16px;">Pagamentos</strong>
+                    <span style="font-size: 12px; color: var(--text-sub);">Cartões e histórico</span>
+                </div>
+                <i data-lucide="chevron-right" size="18" style="color: #cbd5e1;"></i>
             </div>
         </div>
 
-        <div class="form-group" style="margin-bottom: 0;">
-            <label>Rua / Logradouro</label>
-            <div class="input-wrapper"><input type="text" id="new-cli-rua" placeholder="Ex: Av. Paulista"></div>
-        </div>
-
-        <div class="form-group" style="margin-bottom: 0;">
-            <label>Número</label>
-            <div class="input-wrapper"><input type="text" id="new-cli-num" placeholder="Ex: 123 ou S/N"></div>
-        </div>
-
-        <div class="form-group" style="margin-bottom: 0;">
-            <label>Bairro</label>
-            <div class="input-wrapper"><input type="text" id="new-cli-bairro" placeholder="Digite o bairro"></div>
-        </div>
-
-        <div class="form-group" style="margin-bottom: 0;">
-            <label>Cidade</label>
-            <div class="input-wrapper" style="background: #f8fafc;"><input type="text" id="new-cli-cidade" placeholder="Cidade" readonly></div>
-        </div>
-
-        <div class="form-group" style="margin-bottom: 0;">
-            <label>Estado (UF)</label>
-            <div class="input-wrapper" style="background: #f8fafc;"><input type="text" id="new-cli-estado" placeholder="UF" readonly></div>
-        </div>
-
-        <div class="form-group" style="margin-bottom: 0;">
-            <label>Complemento</label>
-            <div class="input-wrapper"><input type="text" id="new-cli-comp" placeholder="Apto, Bloco, Sala..."></div>
-        </div>
-
-        <div class="form-group" style="margin-bottom: 10px;">
-            <label>Observação (Opcional)</label>
-            <div class="input-wrapper"><input type="text" id="new-cli-obs" placeholder="Ex: Próximo ao mercado"></div>
-        </div>
-    </div>
-
-    <button class="btn-main" onclick="salvarNovoCliente()" style="margin-top: 10px;">Salvar e Continuar</button>
-    <p style="text-align:center; margin-top:20px; font-size:14px; color:var(--text-sub); font-weight:700; cursor:pointer;" onclick="voltarParaPasso(1)">Cancelar</p>
-</div>
-
-<div id="envio-v-veiculo" class="hidden">
-    <div style="display:flex; align-items:center; gap:15px; margin-bottom:25px;">
-        <i data-lucide="arrow-left" size="24" onclick="voltarParaPasso(2)" style="cursor:pointer"></i>
-        <h2 class="screen-title">Escolha o transporte</h2>
-    </div>
-
-    <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 30px;">
-        
-        <div class="veiculo-item" id="v-patinete" onclick="selecionarVeiculo('Patinete', 'R$ 6,50')">
-            <div class="veiculo-icon"><i data-lucide="toy-brick"></i></div>
-            <div class="veiculo-info">
-                <strong>Patinete Flexa</strong>
-                <span>Até 1kg • 20x20x10cm</span>
-            </div>
-            <div class="veiculo-preco">R$ 6,50</div>
-        </div>
-
-        <div class="veiculo-item" id="v-bike" onclick="selecionarVeiculo('Bicicleta', 'R$ 8,90')">
-            <div class="veiculo-icon"><i data-lucide="bike"></i></div>
-            <div class="veiculo-info">
-                <strong>Bicicleta</strong>
-                <span>Até 3kg • 30x30x20cm</span>
-            </div>
-            <div class="veiculo-preco">R$ 8,90</div>
-        </div>
-
-        <div class="veiculo-item active" id="v-moto" onclick="selecionarVeiculo('Moto', 'R$ 12,50')">
-            <div class="veiculo-icon"><i data-lucide="motorcycle"></i></div>
-            <div class="veiculo-info">
-                <strong>Moto Flexa</strong>
-                <span>Até 10kg • 40x40x40cm</span>
-            </div>
-            <div class="veiculo-preco">R$ 12,50</div>
-        </div>
-
-        <div class="veiculo-item" id="v-carro" onclick="selecionarVeiculo('Carro', 'R$ 18,00')">
-            <div class="veiculo-icon"><i data-lucide="car"></i></div>
-            <div class="veiculo-info">
-                <strong>Carro</strong>
-                <span>Até 50kg • Porta-malas</span>
-            </div>
-            <div class="veiculo-preco">R$ 18,00</div>
-        </div>
-
-        <div class="veiculo-item" id="v-van" onclick="selecionarVeiculo('Van', 'R$ 45,00')">
-            <div class="veiculo-icon"><i data-lucide="truck"></i></div>
-            <div class="veiculo-info">
-                <strong>Flexa Van</strong>
-                <span>Até 200kg • Grandes volumes</span>
-            </div>
-            <div class="veiculo-preco">R$ 45,00</div>
-        </div>
-
-    </div>
-
-    <button class="btn-main" onclick="irParaRevisao()">Confirmar Veículo</button>
-</div>
-
-
-<div id="envio-p4" class="hidden">
-    <div style="display:flex; align-items:center; gap:15px; margin-bottom:25px;">
-        <i data-lucide="arrow-left" size="24" onclick="voltarParaPasso(2)" style="cursor:pointer"></i>
-        <h2 class="screen-title">Revisar Envio</h2>
-    </div>
-
-    <div class="destinatario-card" style="border: 2px solid var(--brand-orange); background: #fffaf5;">
-        <span class="destinatario-label">Destino</span>
-        <strong class="destinatario-nome" id="rev-nome">Maria Silva</strong>
-        <span class="destinatario-info" id="rev-end">Rua das Flores, 123</span>
-    </div>
-
-    <div style="background: white; padding: 20px; border-radius: 24px; margin-bottom: 20px; border: 1px solid var(--border-color);">
-        <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
-            <span style="color:var(--text-sub); font-weight:600;">Serviço</span>
-            <strong id="rev-servico">Standard</strong>
-        </div>
-        <div style="display:flex; justify-content:space-between; margin-bottom:15px;">
-            <span style="color:var(--text-sub); font-weight:600;">Tamanho</span>
-            <strong id="rev-tamanho">Pacote P</strong>
-        </div>
-        <div style="display:flex; justify-content:space-between; padding-top:15px; border-top:1px dashed #e2e8f0;">
-            <span style="color:var(--text-main); font-weight:800;">Total do Frete</span>
-            <strong style="color:var(--brand-orange); font-size:20px;">R$ 12,50</strong>
-        </div>
-    </div>
-
-    <button class="btn-main" onclick="confirmarEnvioFinal()" style="background:var(--brand-orange);">
-        Criar Envio
-    </button>
-    <p style="text-align:center; margin-top:20px; font-size:14px; color:var(--text-sub); font-weight:700; cursor:pointer;" onclick="voltarParaPasso(2)">Ajustar detalhes</p>
-</div>
-<div id="envio-p5" class="hidden" style="text-align: center; padding-top: 50px;">
-    <div style="width: 100px; height: 100px; background: #10b981; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 30px; box-shadow: 0 10px 20px rgba(16, 185, 129, 0.3);">
-        <i data-lucide="check" size="50" style="color: white;"></i>
-    </div>
-    
-    <h2 class="screen-title" style="margin-bottom: 10px;">Pedido Solicitado!</h2>
-    <p style="color: var(--text-sub); margin-bottom: 40px; padding: 0 20px;">
-        O motorista mais próximo já foi notificado e está a caminho para a coleta.
-    </p>
-
-    <div style="background: #f8fafc; border-radius: 20px; padding: 20px; margin-bottom: 40px; border: 1px solid var(--border-color);">
-        <span style="display:block; font-size:12px; color:var(--text-sub); text-transform:uppercase; font-weight:700; margin-bottom:5px;">Código do Pedido</span>
-        <strong style="font-size:20px; color:var(--text-main);">#FX-8829</strong>
-    </div>
-
-    <button class="btn-main" onclick="navegar('view-dash-loja')">Voltar para o Início</button>
-</div>
-
-        </section>
-
-<section id="view-rotas" class="view">
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 25px;">
-        <h2 style="font-size: 24px; font-weight: 900; letter-spacing: -1px;">Minhas Rotas</h2>
-        <button class="nav-fab" style="position:static; width:44px; height:44px; border:none;" onclick="abrirCriarRota()">
-            <i data-lucide="plus" size="24"></i>
+        <button class= "btn-logout" onclick="logoutReal()" style="width: 100%; margin-top: 40px; background: #fee2e2; color: #ef4444; border: none; padding: 18px; border-radius: 20px; font-weight: 700; display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer;">
+            <i data-lucide="log-out" size="20"></i> Sair da Conta
         </button>
     </div>
+</section>
 
-    <div id="lista-rotas-vazia" class="hidden" style="text-align:center; padding: 40px 20px;">
-        <i data-lucide="map" size="48" style="color:var(--text-sub); margin-bottom:15px; opacity:0.5;"></i>
-        <p style="color:var(--text-sub); font-weight:600;">Nenhuma rota ativa no momento.</p>
+<section id="view-rotas" class="view">
+    <header style="padding: 10px 0 15px; display: flex; justify-content: space-between; align-items: center;">
+        <div class="location-group">
+            <span style="font-size: 11px; color: var(--text-sub); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Local de Coleta</span>
+            <h2 style="font-size: 18px; color: var(--text-main); font-weight: 800; display: flex; align-items: center; gap: 5px;">
+                Maracanaú, CE <i data-lucide="chevron-down" size="18" style="color: var(--brand-orange)"></i>
+            </h2>
+        </div>
+        <div class="notif-badge" style="width: 45px; height: 45px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.05); position: relative;">
+            <i data-lucide="bell" size="22"></i>
+            <div class="dot" style="width: 8px; height: 8px; background: var(--brand-orange); border-radius: 50%; position: absolute; top: 12px; right: 12px; border: 2px solid white;"></div>
+        </div>
+    </header>
+
+    <div class="filter-container">
+        <div class="filter-scroll" style="display: flex; gap: 12px; overflow-x: auto;  padding-bottom: 5px; -webkit-overflow-scrolling: touch;">
+            <div style="background: var(--brand-orange);" class="chip active"><i data-lucide="plus-circle" size="16"></i> Nova Rota</div>
+            <div class="chip">Rastrear</div>
+            <div class="chip">Em Aberto</div>
+            <div class="chip">Finalizadas</div>
+            <div class="chip">Pendentes</div>
+        </div>
     </div>
 
-    <div id="container-lista-rotas">
-        <div class="rota-card" onclick="verDetalhesRota('#RX-1020')" style="margin-bottom: 15px; cursor:pointer;">
-            <div class="rota-icon"><i data-lucide="navigation" size="22"></i></div>
-            <div class="rota-info">
-                <h5>Rota #RX-1020</h5>
-                <p>3 pacotes • R$ 38,50</p>
+    <div class="hero-card" style="background: white; margin: 0 0 25px; padding: 35px 20px; border-radius: 28px; text-align: center; box-shadow: 0 10px 30px rgba(0,0,0,0.03); border: 1px solid rgba(0,0,0,0.02);">
+        <button class="main-add-btn" onclick="openModal()" style="width: 70px; height: 70px; background: linear-gradient(135deg, var(--brand-orange), #FF8E64); border-radius: 50%; border: none; color: white; margin-bottom: 15px; box-shadow: 0 10px 20px rgba(255,107,53,0.3); cursor: pointer; display: inline-flex; align-items: center; justify-content: center;">
+            <i data-lucide="plus" size="32"></i>
+        </button>
+        <h3 style="font-size: 20px; font-weight: 800;">Adicionar Rota</h3>
+        <p style="color: var(--text-sub); font-size: 14px; margin-top: 6px;">Crie uma nova rota para seus entregadores</p>
+    </div>
+
+    <div class="list-header" style="display: flex; justify-content: space-between; padding: 0 5px 15px; font-weight: 800; font-size: 16px; align-items: center;">
+    <span>Rotas aguardando</span>
+    
+    <a href="#" onclick="verTodasAsRotas()" style="text-decoration: none; color: var(--brand-orange); font-size: 13px; font-weight: 700;">
+        Ver todas
+    </a>
+</div>
+
+
+    <div class="routes-list" style="padding: 0;">
+        <div class="route-card" style="background: white; padding: 16px; border-radius: 20px; display: flex; align-items: center; gap: 15px; margin-bottom: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.02);">
+            <div class="icon-box" style="width: 50px; height: 50px; background: #F1F3F5; border-radius: 15px; display: flex; align-items: center; justify-content: center; color: var(--text-main);">
+                <i data-lucide="package" size="24"></i>
             </div>
-            <span class="status-pill" style="background:#fef3c7; color:#d97706;">Aguardando...</span>
+            <div class="route-info" style="flex: 1;">
+                <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 3px;">ID: R5422109</h4>
+                <p style="font-size: 12px; color: var(--text-sub); font-weight: 500;">Mec Mini M4 Pro • 1.2km de você</p>
+            </div>
+            <div class="status-tag" style="padding: 6px 10px; border-radius: 8px; font-size: 10px; font-weight: 800; background: #FFF0EB; color: var(--brand-orange); text-transform: uppercase;">BUSCANDO</div>
+        </div>
+
+        <div class="route-card" style="background: white; padding: 16px; border-radius: 20px; display: flex; align-items: center; gap: 15px; margin-bottom: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.02);">
+            <div class="icon-box" style="width: 50px; height: 50px; background: #F1F3F5; border-radius: 15px; display: flex; align-items: center; justify-content: center; color: var(--text-main);">
+                <i data-lucide="package" size="24"></i>
+            </div>
+            <div class="route-info" style="flex: 1;">
+                <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 3px;">ID: R37883809</h4>
+                <p style="font-size: 12px; color: var(--text-sub); font-weight: 500;">Drone DJI Neo • 0.8km de você</p>
+            </div>
+            <div class="status-tag" style="padding: 6px 10px; border-radius: 8px; font-size: 10px; font-weight: 800; background: #FFF0EB; color: var(--brand-orange); text-transform: uppercase;">BUSCANDO</div>
         </div>
     </div>
 </section>
 
-<div id="modal-criar-rota" class="view" style="position:fixed; top:0; left:0; width:100%; height:100%; background:white; z-index:2000; overflow-y:auto; padding: 25px;">
-    <div style="display:flex; align-items:center; gap:15px; margin-bottom:25px;">
-        <i data-lucide="x" size="24" onclick="fecharModalRota()" style="cursor:pointer"></i>
-        <h2 class="screen-title">Nova Rota</h2>
-    </div>
 
-    <p style="font-size:14px; color:var(--text-sub); margin-bottom:20px;">Selecione os envios pendentes para agrupar nesta rota:</p>
-
-    <div id="selecao-envios" style="display:flex; flex-direction:column; gap:12px; margin-bottom:30px;">
+<div class="modal-overlay" id="overlay-rota" onclick="closeModal()" style="position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; z-index: 1100; backdrop-filter: blur(4px); align-items: flex-end;">
+    <div class="modal-sheet" id="sheet-rota" onclick="event.stopPropagation()" style="width: 100%; background: white; border-radius: 30px 30px 0 0; padding: 35px 25px 50px; transform: translateY(100%); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);">
+        <div class="modal-handle" style="width: 40px; height: 4px; background: #E9ECEF; border-radius: 10px; margin: -15px auto 25px;"></div>
+        <h2 style="font-size: 22px; font-weight: 800; margin-bottom: 10px;">Opções de Entrega</h2>
+        <p style="color: var(--text-sub); margin-bottom: 25px; font-size: 15px;">Selecione como deseja criar sua rota no Flexa.</p>
+        
+        <div style="display: grid; gap: 12px;">
+            <button style="width: 100%; padding: 20px; background: var(--brand-orange); color: white; border: none; border-radius: 18px; font-weight: 700; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer;">
+                <i data-lucide="zap" size="20"></i> Rota Expressa
+            </button>
+            <button style="width: 100%; padding: 20px; background: #F1F3F5; color: var(--text-main); border: none; border-radius: 18px; font-weight: 700; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer;">
+                <i data-lucide="calendar" size="20"></i> Agendar Rota
+            </button>
         </div>
-
-    <div style="background:#f8fafc; padding:20px; border-radius:24px; border:1.5px solid var(--border-color);">
-        <div style="display:flex; justify-content:space-between; margin-bottom:10px;">
-            <span style="color:var(--text-sub);">Qtd. de Envios:</span>
-            <strong id="rota-qtd">0</strong>
-        </div>
-        <div style="display:flex; justify-content:space-between; margin-bottom:15px; padding-top:10px; border-top:1px dashed #e2e8f0;">
-            <span style="font-weight:700;">Total a Pagar:</span>
-            <strong style="color:var(--brand-orange); font-size:20px;" id="rota-total">R$ 0,00</strong>
-        </div>
-        <button class="btn-main" onclick="pagarComPix()">Pagar com PIX</button>
     </div>
 </div>
 
 
+   <nav id="main-nav" style="display: none;">
+    <a href="#" class="nav-item active" onclick="navegar('view-dash-loja')">
+        <i data-lucide="home"></i>
+        <span>Início</span>
+    </a>
+
+    <a href="#" class="nav-item" onclick="navegar('view-rotas')">
+        <i data-lucide="map"></i>
+        <span>Rotas</span>
+    </a>
+
+    <div class="nav-center-plus" onclick="navegar('view-novo-envio')">
+        <i data-lucide="plus" size="32"></i>
     </div>
 
-    <nav class="bottom-nav" id="main-nav">
-        <div class="nav-item active" onclick="navegar('view-dash-loja')"><i data-lucide="home" size="24"></i><span>Home</span></div>
-        <div class="nav-item"><i data-lucide="map" size="24"></i><span>Rotas</span></div>
-        <div class="nav-item" onclick="navegar('view-novo-envio')">
-            <div class="nav-fab"><i data-lucide="plus" size="28"></i></div>
-            <span style="margin-top:5px;">Envio</span>
-        </div>
-        <div class="nav-item"><i data-lucide="message-square" size="24"></i><span>Chat</span></div>
-        <div class="nav-item"><i data-lucide="user" size="24"></i><span>Perfil</span></div>
-    </nav>
+    <a href="#" class="nav-item" onclick="alert('Chat em breve')">
+        <i data-lucide="message-circle"></i>
+        <span>Chat</span>
+    </a>
+
+    <a href="#" class="nav-item" onclick="irParaPerfil()">
+        <i data-lucide="user"></i>
+        <span>Perfil</span>
+    </a>
+</nav>
+
 
     <script>
 const firebaseConfig = {
@@ -837,30 +1167,46 @@ let usuarioLogado = null;
         lucide.createIcons();
 
         function navegar(idTela) {
-    // Remove o 'active' de todas as views e coloca na selecionada
+    // 1. LÓGICA ORIGINAL: Troca de telas
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
     document.getElementById(idTela).classList.add('active');
     
-    // LIMPEZA: Se sair da tela de novo envio, esconde todos os passos internos
+    // 2. LÓGICA ORIGINAL: Limpeza do formulário de envio (MANTIDA)
     if (idTela !== 'view-novo-envio') {
-        // Lista de todos os seus passos de envio
         const passos = ['envio-p1', 'envio-p2', 'envio-p3', 'envio-p4', 'envio-p5', 'envio-v-veiculo'];
         passos.forEach(id => {
             const el = document.getElementById(id);
             if(el) el.classList.add('hidden');
         });
-        
-        // Garante que, ao voltar para 'Novo Envio', comece do P1
-        document.getElementById('envio-p1').classList.remove('hidden');
+        const p1 = document.getElementById('envio-p1');
+        if(p1) p1.classList.remove('hidden');
     }
 
-    // Controle do menu inferior
+    // 3. CONTROLE DE EXIBIÇÃO DO MENU (MANTIDO E AJUSTADO)
     const nav = document.getElementById('main-nav');
-    if(['view-dash-loja', 'view-novo-envio', 'view-rotas'].includes(idTela)) nav.style.display = 'flex';
-    else nav.style.display = 'none';
+    if(['view-dash-loja', 'view-novo-envio', 'view-rotas', 'view-perfil'].includes(idTela)) {
+        nav.style.display = 'flex';
+    } else {
+        nav.style.display = 'none';
+    }
+
+    // 4. NOVA LÓGICA: Atualizar visual dos ícones (ATIVO/INATIVO)
+    // Remove a classe 'active' de todos os itens do menu
+    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+    
+    // Adiciona 'active' no ícone correspondente à tela atual
+    if(idTela === 'view-dash-loja') document.querySelector('.nav-item:nth-child(1)').classList.add('active');
+    if(idTela === 'view-rotas') document.querySelector('.nav-item:nth-child(2)').classList.add('active');
+    // O item 3 é o botão +, ele não precisa de classe active
+    if(idTela === 'view-chat') document.querySelector('.nav-item:nth-child(4)').classList.add('active');
+    if(idTela === 'view-perfil') document.querySelector('.nav-item:nth-child(5)').classList.add('active');
     
     window.scrollTo(0,0);
+    
+    // Re-renderiza os ícones do Lucide para garantir que apareçam
+    if(typeof lucide !== 'undefined') lucide.createIcons();
 }
+
 async function buscarEndereco() {
     const cepField = document.getElementById('new-cli-cep');
     const cep = cepField.value.replace(/\D/g, '');
@@ -1127,7 +1473,7 @@ function salvarNovoCliente() {
             // Agora o clique funciona em qualquer lugar do toast
             toast.onclick = () => desfazerExclusao(cardId);
 
-            let segundosRestantes = 5;
+            let segundosRestantes = 10;
 
             toast.innerHTML = `
                 <div class="undo-content">
@@ -1161,7 +1507,7 @@ function salvarNovoCliente() {
             if (elemento) {
                 elemento.style.opacity = '0';
                 elemento.style.transition = 'opacity 0.5s ease-out';
-                setTimeout(() => elemento.remove(), 500);
+                setTimeout(() => elemento.remove(), 1000);
             }
         }
 
@@ -1334,8 +1680,6 @@ async function loginReal() {
 
     try {
         const cred = await auth.signInWithEmailAndPassword(email, senha);
-        
-        // Busca os dados do perfil no Realtime Database
         const snapshot = await db.ref('usuarios/' + cred.user.uid).once('value');
         const dadosUser = snapshot.val();
 
@@ -1343,15 +1687,211 @@ async function loginReal() {
             usuarioLogado = { id: cred.user.uid, ...dadosUser };
             localStorage.setItem('flexa_session', JSON.stringify(usuarioLogado));
             
-            alert("Bem-vindo, " + usuarioLogado.nome);
+            // 1. Muda para a tela de Dash
             navegar('view-dash-loja');
             
-            // Opcional: Chamar função para carregar dados do banco aqui
+            // 2. Preenche o Dashboard IMEDIATAMENTE (Parando o efeito de carregar)
+            renderizarDashboard(usuarioLogado);
         }
     } catch (error) {
         alert("Erro ao entrar: " + error.message);
     }
 }
+// --- FUNÇÃO PARA IR AO PERFIL E CARREGAR DADOS ---
+function irParaPerfil() {
+    // 1. Ativa a visualização
+    navegar('view-perfil');
+    
+    // 2. Preenche os dados se o usuário estiver logado
+    if (usuarioLogado) {
+        document.getElementById('perfil-nome-loja').innerText = usuarioLogado.nome || "Minha Loja";
+        document.getElementById('perfil-email-loja').innerText = usuarioLogado.email || "";
+        
+        if (usuarioLogado.logo) {
+            document.getElementById('img-perfil-display').src = usuarioLogado.logo;
+        }
+    }
+    
+    // 3. Renderiza os ícones da Lucide que acabaram de aparecer
+    lucide.createIcons();
+}
+// --- FUNÇÃO DE LOGOUT ---
+// 1. FUNÇÃO PARA LOGOUT
+function logoutReal() {
+    if (confirm("Tem certeza que deseja sair?")) {
+        firebase.auth().signOut().then(() => {
+            alert("Sessão encerrada!");
+            // Limpa dados locais se houver e volta para a tela inicial
+            localStorage.removeItem('flexa_user_data'); 
+            window.location.reload(); // Recarrega para limpar o estado da aplicação
+        }).catch((error) => {
+            alert("Erro ao sair: " + error.message);
+        });
+    }
+}
+
+// 2. MONITOR DE ESTADO DE AUTENTICAÇÃO (Persistência)
+// Esta função roda automaticamente sempre que a página abre ou o estado muda
+// MONITOR DE ESTADO DE AUTENTICAÇÃO
+firebase.auth().onAuthStateChanged((user) => {
+    const tabbar = document.getElementById('main-nav');
+    const splash = document.getElementById('splash-screen');
+
+    if (user) {
+        // Usuário Logado
+        firebase.database().ref('usuarios/' + user.uid).once('value')
+            .then((snapshot) => {
+                const userData = snapshot.val();
+                if (userData) {
+                    window.usuarioLogado = { id: user.uid, ...userData };
+                    renderizarDashboard(userData);
+                    navegar('view-dash-loja');
+                    if (tabbar) tabbar.style.display = 'flex';
+                }
+                finalizarSplash(splash);
+            }).catch(() => finalizarSplash(splash));
+    } else {
+        // Usuário Deslogado
+        navegar('view-inicio');
+        if (tabbar) tabbar.style.display = 'none';
+        finalizarSplash(splash);
+    }
+});
+
+// Função suave para esconder o splash
+function finalizarSplash(elemento) {
+    if (elemento) {
+        elemento.style.opacity = '0';
+        setTimeout(() => {
+            elemento.style.display = 'none';
+        }, 500); // Tempo da transição CSS
+    }
+}
+
+// Função suave para esconder o splash
+function finalizarSplash(elemento) {
+    if (elemento) {
+        elemento.style.opacity = '0';
+        setTimeout(() => {
+            elemento.style.display = 'none';
+        }, 500); // Tempo da transição CSS
+    }
+}
+
+// 3. ATUALIZAÇÃO DA FUNÇÃO DE LOGIN EXISTENTE
+// Certifique-se que sua função loginReal() use o Firebase Auth corretamente
+// O Firebase por padrão já usa 'local' persistence no browser.
+function loginReal() {
+    const email = document.querySelector('#form-entrar input[type="email"]').value;
+    const senha = document.querySelector('#pass-login').value;
+
+    if (!email || !senha) {
+        alert("Preencha todos os campos!");
+        return;
+    }
+
+    firebase.auth().signInWithEmailAndPassword(email, senha)
+        .then((userCredential) => {
+            // O onAuthStateChanged acima cuidará do redirecionamento
+           
+        })
+        .catch((error) => {
+            alert("Erro no login: " + error.message);
+        });
+}
+
+
+// --- UPLOAD DE LOGO (BASE64) ---
+function uploadLogo(input) {
+    if (input.files && input.files[0]) {
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            const base64Image = e.target.result;
+            document.getElementById('logo-perfil-display').src = base64Image;
+            
+            try {
+                await db.ref('usuarios/' + usuarioLogado.id).update({ logo: base64Image });
+                // Atualiza também no Dashboard
+                const logoDash = document.querySelector('.profile-img');
+                if(logoDash) logoDash.src = base64Image;
+                alert("Logo atualizada!");
+            } catch (err) {
+                alert("Erro ao salvar: " + err.message);
+            }
+        };
+        reader.readAsDataURL(input.files[0]);
+    }
+}
+
+function renderizarDashboard(user) {
+    const container = document.getElementById('dash-loader-content');
+    const fotoUrl = user.logo || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100';
+    
+    // Atualiza a foto pequena no topo
+    document.querySelector('.profile-img').src = fotoUrl;
+
+    container.innerHTML = `
+        <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 25px;">Olá, ${user.nome}! 👋</h2>
+        <div class="promo-banner">
+            <h3>Está com pressa?</h3>
+            <p>Experimente o envio <b>Flash</b>.</p>
+        </div>
+        
+        <div class="grid-stats">
+            <div class="stat-card"><span>Entregas hoje</span><h4>0</h4></div>
+            <div class="stat-card"><span>Em trânsito</span><h4>0</h4></div>
+        </div>
+
+        <div class="filter-container">
+            <div style="background: var(--brand-orange)" class="chip active">Todas</div>
+            <div class="chip">Em rota</div>
+            <div class="chip">Pendentes</div>
+        </div>
+
+        <div id="lista-vazia-dash" style="text-align:center; padding:20px; color:var(--text-sub);">
+            <p>Nenhuma atividade recente.</p>
+        </div>
+    `;
+    lucide.createIcons();
+}
+function buscarDadosDoBanco(uid) {
+    db.ref('usuarios/' + uid).once('value') // Use 'db' aqui também
+        .then((snapshot) => {
+            const dados = snapshot.val();
+            if (dados) {
+                // ADICIONE ESTA LINHA ABAIXO:
+                window.usuarioLogado = { id: uid, ...dados }; 
+                
+                renderizarDashboard(dados); 
+                navegar('view-dash-loja');
+            } else {
+                navegar('view-auth'); 
+            }
+        });
+}
+// Adicione ou substitua no seu <script>
+const overlayRota = document.getElementById('overlay-rota');
+const sheetRota = document.getElementById('sheet-rota');
+
+function openModal() {
+    overlayRota.style.display = 'flex';
+    // Pequeno delay para permitir a transição CSS
+    setTimeout(() => {
+        sheetRota.classList.add('show');
+    }, 10);
+}
+
+function closeModal() {
+    sheetRota.classList.remove('show');
+    setTimeout(() => {
+        overlayRota.style.display = 'none';
+    }, 400); // Tempo igual à transição CSS
+}
+
+// Atualize a inicialização dos ícones caso necessário
+lucide.createIcons();
+
+
 </script>
 </body>
 </html>
