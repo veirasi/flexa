@@ -1288,11 +1288,12 @@ let usuarioLogado = null;
         lucide.createIcons();
 
         function navegar(idTela) {
-    // 1. LÓGICA ORIGINAL: Troca de telas
+    // 1. Troca de telas
     document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    document.getElementById(idTela).classList.add('active');
+    const target = document.getElementById(idTela);
+    if(target) target.classList.add('active');
     
-    // 2. LÓGICA ORIGINAL: Limpeza do formulário de envio (MANTIDA)
+    // 2. Limpeza do formulário de envio (Regra do Flexa)
     if (idTela !== 'view-novo-envio') {
         const passos = ['envio-p1', 'envio-p2', 'envio-p3', 'envio-p4', 'envio-p5', 'envio-v-veiculo'];
         passos.forEach(id => {
@@ -1303,29 +1304,42 @@ let usuarioLogado = null;
         if(p1) p1.classList.remove('hidden');
     }
 
-    // 3. CONTROLE DE EXIBIÇÃO DO MENU (MANTIDO E AJUSTADO)
-    const nav = document.getElementById('main-nav');
-    if(['view-dash-loja', 'view-novo-envio', 'view-rotas', 'view-perfil'].includes(idTela)) {
-        nav.style.display = 'flex';
-    } else {
-        nav.style.display = 'none';
+    // 3. Controle do Menu Inferior
+    // MUDANÇA: Use o ID exato que está no seu HTML (ex: main-nav)
+    const nav = document.getElementById('main-nav'); 
+    const telasComMenu = ['view-dash-loja', 'view-novo-envio', 'view-rotas', 'view-perfil'];
+    
+    if(nav) {
+        nav.style.display = telasComMenu.includes(idTela) ? 'flex' : 'none';
     }
 
-    // 4. NOVA LÓGICA: Atualizar visual dos ícones (ATIVO/INATIVO)
-    // Remove a classe 'active' de todos os itens do menu
+    // 4. Marcar Ícone Ativo
     document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
     
-    // Adiciona 'active' no ícone correspondente à tela atual
-    if(idTela === 'view-dash-loja') document.querySelector('.nav-item:nth-child(1)').classList.add('active');
-    if(idTela === 'view-rotas') document.querySelector('.nav-item:nth-child(2)').classList.add('active');
-    // O item 3 é o botão +, ele não precisa de classe active
-    if(idTela === 'view-chat') document.querySelector('.nav-item:nth-child(4)').classList.add('active');
-    if(idTela === 'view-perfil') document.querySelector('.nav-item:nth-child(5)').classList.add('active');
+    // Mapeamento simples
+    const menuMap = {
+        'view-dash-loja': 1,
+        'view-rotas': 2,
+        'view-chat': 4,
+        'view-perfil': 5
+    };
+
+    if(menuMap[idTela]) {
+        const activeItem = document.querySelector(`.nav-item:nth-child(${menuMap[idTela]})`);
+        if(activeItem) activeItem.classList.add('active');
+    }
     
     window.scrollTo(0,0);
-    
-    // Re-renderiza os ícones do Lucide para garantir que apareçam
     if(typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// Função de Preview da Foto (Ponto 1)
+function previewImage(event) {
+    const reader = new FileReader();
+    reader.onload = function() {
+        document.getElementById('preview-foto').src = reader.result;
+    }
+    reader.readAsDataURL(event.target.files[0]);
 }
 
 async function buscarEndereco() {
