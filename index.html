@@ -809,9 +809,14 @@
         </section>
 
         <section id="view-dash-loja" class="view">
-            <header class="header-dash">
+          <header class="header-dash">
                 <div class="logo">FLEX<span>A</span></div>
-                <div style="display:flex; align-items:center; gap:15px;"><i data-lucide="bell" size="24"></i><img src="https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100" class="profile-img"></div>
+                <div style="style="display: flex; justify-content: flex-end; padding: 10px 20px;">
+				<div class="notif-badge" style="width: 42px; height: 42px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.08); position: relative; cursor: pointer;">
+            <i data-lucide="bell" size="22" style="color: var(--text-main);"></i>
+            <div class="dot" style="width: 8px; height: 8px; background: var(--brand-orange); border-radius: 50%; position: absolute; top: 10px; right: 10px; border: 2px solid white;"></div>
+        </div>
+    </div>
             </header>
             <div id="dash-loader-content">
                 <h2 class="skeleton" style="font-size: 24px; font-weight: 800; margin-bottom: 25px; width: 80%;">Olá, Express Imports! 👋</h2>
@@ -908,9 +913,9 @@
                 <strong>Standard</strong>
                 <span>Até 24h</span>
             </div>
-            <div class="select-box" id="srv-flash" onclick="selecionarServico('Expresso')">
+            <div class="select-box" id="srv-flash" onclick="selecionarServico('Flash')">
                 <i data-lucide="zap" size="24"></i>
-                <strong>Expresso</strong>
+                <strong>Flash</strong>
                 <span>Até 2h</span>
             </div>
         </div>
@@ -1533,7 +1538,7 @@ function salvarNovoCliente() {
                         setTimeout(() => {
                 document.getElementById('dash-loader-content').innerHTML = `
                     <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 25px;">Olá, Express Imports! 👋</h2>
-                    <div class="promo-banner"><h3>Está com pressa?</h3><p>Experimente o envio <b>Expresso</b>.</p></div>
+                    <div class="promo-banner"><h3>Está com pressa?</h3><p>Experimente o envio <b>Flash</b>.</p></div>
                     
                     <div class="grid-stats">
                         <div class="stat-card"><span>Entregas hoje</span><h4>12</h4></div>
@@ -1766,7 +1771,7 @@ function abrirCriarRota() {
             <div style="flex:1">
                 <strong style="display:block">${envio.cliente}</strong>
                 <span style="font-size:12px; color:var(--text-sub)">R$ ${envio.preco.toFixed(2)}</span>
-                ${envio.flash ? '<span class="badge-flash">Expresso</span>' : ''}
+                ${envio.flash ? '<span class="badge-flash">FLASH</span>' : ''}
             </div>
             <i data-lucide="circle"></i>
         `;
@@ -1974,17 +1979,27 @@ function uploadLogo(input) {
 }
 
 function renderizarDashboard(user) {
+    // 1. Define o container onde o conteúdo será injetado
     const container = document.getElementById('dash-loader-content');
-    const fotoUrl = user.logo || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100';
-    
-    // Atualiza a foto pequena no topo
-    document.querySelector('.profile-img').src = fotoUrl;
+    if (!container) return;
 
+    // 2. Define a foto (Prioriza 'foto', depois 'logo', e por fim o placeholder)
+    const fotoUrl = user.foto || user.logo || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100';
+    
+
+    // 4. Monta o HTML dinâmico
     container.innerHTML = `
-        <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 25px;">Olá, ${user.nome}! 👋</h2>
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 25px;">
+            <img src="${fotoUrl}" style="width: 45px; height: 45px; border-radius: 50%; object-fit: cover; border: 2px solid var(--brand-orange);">
+            <div>
+                <p style="color: var(--text-sub); font-size: 12px; margin: 0;">Bem-vindo,</p>
+                <h2 style="font-size: 20px; font-weight: 800; margin: 0;">${user.nome || 'Usuário'}! 👋</h2>
+            </div>
+        </div>
+
         <div class="promo-banner">
             <h3>Está com pressa?</h3>
-            <p>Experimente o envio <b>Expresso</b>.</p>
+            <p>Experimente o envio <b>Flash</b>.</p>
         </div>
         
         <div class="grid-stats">
@@ -2002,7 +2017,9 @@ function renderizarDashboard(user) {
             <p>Nenhuma atividade recente.</p>
         </div>
     `;
-    lucide.createIcons();
+    
+    // 5. Renderiza os ícones do Lucide
+    if(typeof lucide !== 'undefined') lucide.createIcons();
 }
 function buscarDadosDoBanco(uid) {
     // Usamos .on para que qualquer alteração no banco reflita no app em tempo real
