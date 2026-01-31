@@ -915,7 +915,7 @@
             </div>
             <div class="select-box" id="srv-flash" onclick="selecionarServico('Flash')">
                 <i data-lucide="zap" size="24"></i>
-                <strong>Expresso</strong>
+                <strong>Flash</strong>
                 <span>Até 2h</span>
             </div>
         </div>
@@ -1128,10 +1128,13 @@
     </div>
     <i data-lucide="chevron-right" class="arrow" size="18"></i>
 </div>
-                <div class="menu-item" onclick="abrirEndereco()">
-                    <div class="item-left"><i data-lucide="map-pin"></i><span>Endereço</span></div>
-                    <i data-lucide="chevron-right" size="18" class="arrow"></i>
-                </div>
+                <div class="menu-item" onclick="abrirModalEndereco()">
+    <div class="item-left">
+        <i data-lucide="map-pin"></i>
+        <span>Endereço</span>
+    </div>
+    <i data-lucide="chevron-right" size="18" class="arrow"></i>
+</div>
                 <div class="menu-item" onclick="abrirPagamento()">
                     <div class="item-left"><i data-lucide="credit-card"></i><span>Pagamento</span></div>
                     <i data-lucide="chevron-right" size="18" class="arrow"></i>
@@ -1538,7 +1541,7 @@ function salvarNovoCliente() {
                         setTimeout(() => {
                 document.getElementById('dash-loader-content').innerHTML = `
                     <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 25px;">Olá, Express Imports! 👋</h2>
-                    <div class="promo-banner"><h3>Está com pressa?</h3><p>Experimente o envio <b>Expresso</b>.</p></div>
+                    <div class="promo-banner"><h3>Está com pressa?</h3><p>Experimente o envio <b>Flash</b>.</p></div>
                     
                     <div class="grid-stats">
                         <div class="stat-card"><span>Entregas hoje</span><h4>12</h4></div>
@@ -1771,7 +1774,7 @@ function abrirCriarRota() {
             <div style="flex:1">
                 <strong style="display:block">${envio.cliente}</strong>
                 <span style="font-size:12px; color:var(--text-sub)">R$ ${envio.preco.toFixed(2)}</span>
-                ${envio.flash ? '<span class="badge-flash">Expresso</span>' : ''}
+                ${envio.flash ? '<span class="badge-flash">FLASH</span>' : ''}
             </div>
             <i data-lucide="circle"></i>
         `;
@@ -1999,7 +2002,7 @@ function renderizarDashboard(user) {
 
         <div class="promo-banner">
             <h3>Está com pressa?</h3>
-            <p>Experimente o envio <b>Expresso</b>.</p>
+            <p>Experimente o envio <b>Flash</b>.</p>
         </div>
         
         <div class="grid-stats">
@@ -2149,7 +2152,199 @@ function salvarPerfil() {
         });
 }
 
+// 1. ABRE O MODAL E PREENCHE OS DADOS SE EXISTIREM
+function abrirModalEndereco() {
+    const modal = document.getElementById('modal-endereco');
+    if (!modal) return;
+    
+    modal.style.display = 'flex';
+    
+    // Atualiza ícones Lucide (como o ícone de fechar e map-pin)
+    if(typeof lucide !== 'undefined') lucide.createIcons();
+    
+    // Tenta pegar os dados salvos no objeto global
+    const end = window.usuarioLogado?.endereco;
+    if (end) {
+        document.getElementById('end-cep').value = end.cep || '';
+        document.getElementById('end-rua').value = end.rua || '';
+        document.getElementById('end-num').value = end.num || '';
+        document.getElementById('end-bairro').value = end.bairro || '';
+        document.getElementById('end-cidade').value = end.cidade || '';
+        document.getElementById('end-uf').value = end.uf || '';
+        document.getElementById('end-comp').value = end.comp || '';
+    }
+}
+
+// 2. FECHA O MODAL
+function fecharModalEndereco() {
+    document.getElementById('modal-endereco').style.display = 'none';
+}
+
+// 3. BUSCA CEP (VERSÃO ÚNICA E COMPLETA)
+function buscarCEP(valor) {
+    const cep = valor.replace(/\D/g, '');
+    if (cep.length !== 8) return;
+
+    // Feedback visual nos campos
+    const campoRua = document.getElementById('end-rua');
+    campoRua.placeholder = "Buscando endereço...";
+
+    fetch(`https://viacep.com.br/ws/${cep}/json/`)
+        .then(res => res.json())
+        .then(dados => {
+            if (!dados.erro) {
+                document.getElementById('end-rua').value = dados.logradouro;
+                document.getElementById('end-bairro').value = dados.bairro;
+                document.getElementById('end-cidade').value = dados.localidade;
+                document.getElementById('end-uf').value = dados.uf;
+                document.getElementById('end-num').focus(); // Foca no número para agilizar
+            } else {
+                alert("CEP não encontrado.");
+                campoRua.placeholder = "Nome da rua";
+            }
+        })
+        .catch(() => {
+            alert("Erro ao buscar CEP. Verifique sua conexão.");
+            campoRua.placeholder = "Nome da rua";
+        });
+}
+
+// 4. SALVA NO FIREBASE
+function salvarEndereco() {
+    // Identifica o UID de forma segura
+    const uid = window.usuarioLogado?.id || (firebase.auth().currentUser ? firebase.auth().currentUser.uid : null);
+    
+    if (!uid) {
+        alert("Erro: Usuário não identificado.");
+        return;
+    }
+
+    const endereco = {
+        cep: document.getElementById('end-cep').value,
+        rua: document.getElementById('end-rua').value,
+        num: document.getElementById('end-num').value,
+        bairro: document.getElementById('end-bairro').value,
+        cidade: document.getElementById('end-cidade').value,
+        uf: document.getElementById('end-uf').value,
+        comp: document.getElementById('end-comp').value
+    };
+
+    // Salva no nó 'endereco' dentro do perfil do usuário
+    db.ref('usuarios/' + uid + '/endereco').update(endereco)
+        .then(() => {
+            // Atualiza o objeto local para refletir as mudanças sem recarregar
+            if (!window.usuarioLogado) window.usuarioLogado = {};
+            window.usuarioLogado.endereco = endereco;
+            
+            fecharModalEndereco();
+            alert("Endereço atualizado com sucesso!");
+        })
+        .catch(error => {
+            console.error("Erro ao salvar endereço:", error);
+            alert("Erro ao salvar: " + error.message);
+        });
+}
 </script>
+
+<style>
+/* Padronização de Modais Sheet */
+.modal-perfil-overlay {
+    display: none;
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0,0,0,0.5);
+    z-index: 10000;
+    align-items: flex-end; /* Faz ser um Sheet (baixo para cima) */
+    justify-content: center;
+}
+
+.modal-perfil-sheet {
+    width: 100%;
+    max-width: 500px;
+    background: white;
+    border-top-left-radius: 30px;
+    border-top-right-radius: 30px;
+    padding: 20px 25px 40px 25px;
+    box-sizing: border-box;
+    animation: slideUp 0.3s ease-out;
+    max-height: 90vh;
+    overflow-y: auto;
+}
+
+/* Estilo dos Inputs igual ao print image_be5f39.png */
+.modal-perfil-body .form-group {
+    margin-bottom: 15px;
+}
+
+.modal-perfil-body label {
+    display: block;
+    font-size: 14px;
+    font-weight: 800;
+    color: #001f3f; /* Azul escuro do tema */
+    margin-bottom: 8px;
+    text-align: left;
+}
+
+.modal-perfil-body .input-wrapper {
+    display: flex;
+    align-items: center;
+    background: #ffffff;
+    border: 1px solid #f0f4f8;
+    border-radius: 15px;
+    padding: 12px 15px;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+	height: 58px;
+}
+
+.modal-perfil-body input {
+    width: 100%;
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 15px;
+    color: #334155;
+    padding-left: 10px;
+}
+
+/* Botões do Rodapé */
+.modal-footer-btns {
+    display: flex;
+    gap: 15px;
+    margin-top: 25px;
+}
+
+.btn-cancelar {
+    flex: 1;
+    padding: 15px;
+    background: #ffffff;
+    border: 1px solid #f0f4f8;
+    border-radius: 15px;
+    color: #001f3f;
+    font-weight: 800;
+    cursor: pointer;
+	font-size: 15px;
+}
+
+.btn-salvar {
+    flex: 2;
+    padding: 15px;
+    background: #f58220; /* Laranja Flexa */
+    border: none;
+    border-radius: 15px;
+    color: white;
+    font-weight: 700;
+    font-size: 16px;
+    cursor: pointer;
+}
+
+@keyframes slideUp {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+}
+</style>
 
 <div id="overlay-perfil" class="modal-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.5); z-index:10000; align-items:flex-end;">
     <div id="sheet-perfil" class="modal-sheet" style="background:white; width:100%; border-radius:30px 30px 0 0; padding:25px; transform:translateY(100%); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);">
@@ -2158,15 +2353,15 @@ function salvarPerfil() {
         <h2 style="font-size:20px; font-weight:800; margin-bottom:20px; text-align:center;">Dados da Conta</h2>
 
         <div style="text-align:center; margin-bottom:25px;">
-    <div style="position:relative; width:110px; height:110px; margin:0 auto; cursor:pointer;" onclick="document.getElementById('input-foto').click()">
-        <img id="edit-preview-img" src="https://via.placeholder.com/150" style="width:100%; height:100%; border-radius:50%; object-fit:cover; border:3px solid var(--brand-orange); transition: opacity 0.3s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
-        <div style="position:absolute; top:0; left:0; width:100%; height:100%; border-radius:50%; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.1); font-size:12px; color:white; pointer-events:none;">
-             <i data-lucide="camera" size="20"></i>
+            <div style="position:relative; width:110px; height:110px; margin:0 auto; cursor:pointer;" onclick="document.getElementById('input-foto').click()">
+                <img id="edit-preview-img" src="https://via.placeholder.com/150" style="width:100%; height:100%; border-radius:50%; object-fit:cover; border:3px solid var(--brand-orange); transition: opacity 0.3s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                <div style="position:absolute; top:0; left:0; width:100%; height:100%; border-radius:50%; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.1); font-size:12px; color:white; pointer-events:none;">
+                     <i data-lucide="camera" size="20"></i>
+                </div>
+                <input type="file" id="input-foto" accept="image/*" style="display:none;" onchange="previewImagem(this)">
+            </div>
+            <p style="font-size: 12px; color: var(--text-sub); margin-top: 8px;">Toque na foto para alterar</p>
         </div>
-        <input type="file" id="input-foto" accept="image/*" style="display:none;" onchange="previewImagem(this)">
-    </div>
-    <p style="font-size: 12px; color: var(--text-sub); margin-top: 8px;">Toque na foto para alterar</p>
-</div>
 
         <div class="form-group">
             <label>Nome do Usuário/Loja</label>
@@ -2190,5 +2385,65 @@ function salvarPerfil() {
     </div>
 </div>
 
+<div id="modal-endereco" class="modal-perfil-overlay">
+    <div class="modal-perfil-sheet" style="display: flex; flex-direction: column; max-height: 90vh;">
+        
+        <div style="flex-shrink: 0;">
+            <div style="width: 40px; height: 4px; background: #e2e8f0; border-radius: 10px; margin: 0 auto 15px;"></div>
+            <h2 style="text-align: center; color: #001f3f; font-weight: 900; margin-bottom: 25px;">Meu Endereço</h2>
+        </div>
+
+        <div class="modal-perfil-body" style="flex: 1; overflow-y: auto; padding-right: 5px;">
+            <div class="form-group">
+                <label>CEP</label>
+                <div class="input-wrapper">
+                    <i data-lucide="map-pin" size="18" style="color: #ccc;"></i>
+                    <input type="tel" id="end-cep" placeholder="00000-000" maxlength="9" oninput="this.value = this.value.replace(/\D/g, '').replace(/^(\d{5})(\d)/, '$1-$2')" onblur="buscarCEP(this.value)">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Rua / Logradouro</label>
+                <div class="input-wrapper">
+                    <input type="text" id="end-rua" placeholder="Nome da rua">
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-group">
+                    <label>Número</label>
+                    <div class="input-wrapper"><input type="text" id="end-num" placeholder="123"></div>
+                </div>
+                <div class="form-group">
+                    <label>Bairro</label>
+                    <div class="input-wrapper"><input type="text" id="end-bairro" placeholder="Seu bairro"></div>
+                </div>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 2fr 1fr; gap: 15px;">
+                <div class="form-group">
+                    <label>Cidade</label>
+                    <div class="input-wrapper"><input type="text" id="end-cidade" readonly style="color: #94a3b8;"></div>
+                </div>
+                <div class="form-group">
+                    <label>UF</label>
+                    <div class="input-wrapper"><input type="text" id="end-uf" readonly style="color: #94a3b8; text-align: center;"></div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Complemento</label>
+                <div class="input-wrapper">
+                    <input type="text" id="end-comp" placeholder="Apto, Bloco, etc.">
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-footer-btns" style="flex-shrink: 0; padding-top: 20px; background: white;">
+            <button class="btn-cancelar" onclick="fecharModalEndereco()">Cancelar</button>
+            <button class="btn-salvar" onclick="salvarEndereco()">Salvar Alterações</button>
+        </div>
+    </div>
+</div>
 </body>
 </html>
