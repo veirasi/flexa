@@ -915,7 +915,7 @@
             </div>
             <div class="select-box" id="srv-flash" onclick="selecionarServico('Flash')">
                 <i data-lucide="zap" size="24"></i>
-                <strong>Flash</strong>
+                <strong>Expresso</strong>
                 <span>Até 2h</span>
             </div>
         </div>
@@ -1771,7 +1771,7 @@ function abrirCriarRota() {
             <div style="flex:1">
                 <strong style="display:block">${envio.cliente}</strong>
                 <span style="font-size:12px; color:var(--text-sub)">R$ ${envio.preco.toFixed(2)}</span>
-                ${envio.flash ? '<span class="badge-flash">FLASH</span>' : ''}
+                ${envio.flash ? '<span class="badge-flash">Expresso</span>' : ''}
             </div>
             <i data-lucide="circle"></i>
         `;
@@ -1999,7 +1999,7 @@ function renderizarDashboard(user) {
 
         <div class="promo-banner">
             <h3>Está com pressa?</h3>
-            <p>Experimente o envio <b>Flash</b>.</p>
+            <p>Experimente o envio <b>Expresso</b>.</p>
         </div>
         
         <div class="grid-stats">
