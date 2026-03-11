@@ -1,4 +1,4 @@
-?// ===================== [CONFIG & ESTADO GLOBAL] =====================
+// ===================== [CONFIG & ESTADO GLOBAL] =====================
 const firebaseConfig = {
   apiKey: "AIzaSyBNsTcLawc8VaILryw36F5Iv6tIK0N41Og",
   authDomain: "flexa-app-41205.firebaseapp.com",
