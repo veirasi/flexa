@@ -1,4 +1,4 @@
-        /* ESTILOS ORIGINAIS MANTIDOS */
+﻿        /* ESTILOS ORIGINAIS MANTIDOS */
         :root {
             --brand-orange: #f58220;
             --brand-orange-hover: #e67616;
@@ -88,7 +88,7 @@
     z-index: 9999;
 }
 
-/*  cones n o ativos (Brancos Vazados) */
+/* �cones n�o ativos (Brancos Vazados) */
 .nav-item {
     color: #FFFFFF;
     text-decoration: none;
@@ -101,10 +101,10 @@
 }
 
 .nav-item i {
-    stroke-width: 1.5px; /* Deixa o  cone mais fino/vazado */
+    stroke-width: 1.5px; /* Deixa o �cone mais fino/vazado */
 }
 
-/*  cone ativo (Branco Preenchido) */
+/* �cone ativo (Branco Preenchido) */
 .nav-item.active {
     color: #FFFFFF;
     opacity: 1;
@@ -119,7 +119,7 @@
     font-weight: 600;
 }
 
-/* Bot o + Envio em Destaque */
+/* Bot�o + Envio em Destaque */
 .nav-center-plus {
     background: #FFFFFF; /* Fundo Branco */
     width: 50px;
@@ -173,7 +173,7 @@
 
         .section-title { font-size: 15px; font-weight: 800; color: #0f172a; margin-bottom: 15px; display: block; }
 
-        /* Grid de Sele  o (Servi o e Tamanho) */
+        /* Grid de Sele��o (Servi�o e Tamanho) */
         .selection-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 25px; }
         .selection-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 25px; }
         
@@ -291,7 +291,7 @@
             text-transform: uppercase; 
         }
         .pill-em-rota { background: #ecfdf5; color: #10b981; }
-      /* Anima  o suave para troca de passos internos */
+      /* Anima��o suave para troca de passos internos */
 .fade-step {
     animation: fadeStep 0.35s ease-out;
 }
@@ -301,15 +301,15 @@
     to { opacity: 1; transform: translateX(0); }
 }
 
- /* Ajuste para que o grid de 2 colunas n o estique os cards */
+ /* Ajuste para que o grid de 2 colunas n�o estique os cards */
 .selection-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr); /* For amos a base de 3 colunas para alinhar com o de baixo */
+    grid-template-columns: repeat(3, 1fr); /* For�amos a base de 3 colunas para alinhar com o de baixo */
     gap: 12px;
     margin-bottom: 25px;
 }
 
-/* Padroniza  o do tamanho dos boxes */
+/* Padroniza��o do tamanho dos boxes */
 .select-box {
     background: white;
     border: 2px solid #f1f5f9;
@@ -325,13 +325,13 @@
     min-height: 85px; /* Altura fixa para garantir harmonia entre todos */
 }
 
-/* Ajuste dos  cones dentro dos boxes para n o empurrarem muito o texto */
+/* Ajuste dos �cones dentro dos boxes para n�o empurrarem muito o texto */
 .select-box i {
     margin-bottom: 5px;
     width: 20px;
     height: 20px;
 }       
-                      /* --- DESIGN DO SWIPE E DESFAZER (VERS O FINAL) --- */
+                      /* --- DESIGN DO SWIPE E DESFAZER (VERS�O FINAL) --- */
         .swipe-container {
             position: relative;
             overflow: hidden;
@@ -370,7 +370,7 @@
             left: -0.1%;
         }
 
-                /* AVISO MELHORADO: TODO CLIC VEL E COM CONTADOR */
+                /* AVISO MELHORADO: TODO CLIC�VEL E COM CONTADOR */
         .undo-toast {
             position: fixed;
             bottom: 30px;
@@ -388,7 +388,7 @@
             box-shadow: 0 10px 25px rgba(0,0,0,0.3);
             width: 90%;
             max-width: 380px;
-            cursor: pointer; /* Indica que   clic vel */
+            cursor: pointer; /* Indica que � clic�vel */
             animation: slideUpToast 0.3s ease-out;
             user-select: none;
         }
@@ -408,7 +408,7 @@
             padding-right: 5px;
         }
 
-        /* O CONTADOR (C RCULO) */
+        /* O CONTADOR (C�RCULO) */
         .undo-timer {
             width: 24px;
             height: 24px;
@@ -539,7 +539,7 @@
     gap: 10px; 
     font-weight: 700;
     
-    /* Adi  es para funcionalidade e toque */
+    /* Adi��es para funcionalidade e toque */
     cursor: pointer;
     transition: var(--transition);
 }
@@ -601,18 +601,18 @@
 .user-name { font-size: 22px; font-weight: 800; color: #000; margin-bottom: 2px; }
 .user-instagram { font-size: 14px; color: var(--text-sub); font-weight: 500; }
 
-/* Ponto 2: Se  es e Cards Arredondados */
+/* Ponto 2: Se��es e Cards Arredondados */
 
 .perfil-content { 
     padding: 0 8px; 
     margin-top: 20px;
 
-/* Espa o m nimo nas laterais para encostar mais */
+/* Espa�o m�nimo nas laterais para encostar mais */
 }
 
 .perfil-section { 
     margin-top: 10px;
-    margin-bottom: 35px; /* Aumentado para descolar o t tulo da se  o seguinte */
+    margin-bottom: 35px; /* Aumentado para descolar o t�tulo da se��o seguinte */
 }
 
 .section-label {
@@ -657,12 +657,12 @@
 .item-left span { font-size: 15px; font-weight: 600; color: #000; }
 .arrow { color: #cbd5e1; }
 
-/* Ponto 3: Bot o Logout (Dentro do Fluxo) */
+/* Ponto 3: Bot�o Logout (Dentro do Fluxo) */
 
 .perfil-footer { 
     padding: 0 2px; /* Mesma folga lateral dos cards (.perfil-content) */
     margin-top: 10px;
-    margin-bottom: 30px; /* Garante que n o fique colado na tab bar */
+    margin-bottom: 30px; /* Garante que n�o fique colado na tab bar */
 }
 
 .btn-logout {
@@ -679,7 +679,7 @@
     justify-content: center;
     gap: 10px;
     cursor: pointer;
-    box-sizing: border-box; /* Garante que o padding n o estoure a largura */
+    box-sizing: border-box; /* Garante que o padding n�o estoure a largura */
 }
 
 
@@ -692,14 +692,14 @@
     padding: 10px 0 20px 0;
 }
 
-/* A linha de bot es que desliza */
+/* A linha de bot�es que desliza */
 .filter-scroll {
     display: flex;
     gap: 12px;
     overflow-x: auto; /* Ativa o scroll horizontal */
     padding: 0 5px; /* Pequeno respiro nas laterais */
     
-    /* Remove as barras de rolagem vis veis para ficar limpo */
+    /* Remove as barras de rolagem vis�veis para ficar limpo */
     scrollbar-width: none; 
     -webkit-overflow-scrolling: touch; 
 }
@@ -708,9 +708,9 @@
     display: none;
 }
 
-/* O Chip (Bot o) */
+/* O Chip (Bot�o) */
 .chip {
-    flex-shrink: 0; /* CRUCIAL: impede o bot o de amassar no mobile */
+    flex-shrink: 0; /* CRUCIAL: impede o bot�o de amassar no mobile */
     white-space: nowrap; /* Impede o texto de quebrar linha */
     padding: 10px 20px;
     background: white;
@@ -725,7 +725,7 @@
     border: 1px solid #f1f5f9;
 }
 
-/* Mant m o destaque do primeiro bot o como no seu c digo */
+/* Mant�m o destaque do primeiro bot�o como no seu c�digo */
 .chip.active {
     background: var(--dark);
     color: white;
@@ -764,7 +764,7 @@
     animation: spin 1s linear infinite;
 }
 
-/* ANIMA  ES */
+/* ANIMA��ES */
 @keyframes fadeInScale {
     from { opacity: 0; transform: scale(0.9); }
     to { opacity: 1; transform: scale(1); }
@@ -783,7 +783,7 @@
 
  
 
-/* Padroniza  o de Modais Sheet */
+/* Padroniza��o de Modais Sheet */
 .modal-perfil-overlay {
     display: none;
     position: fixed;
@@ -1040,7 +1040,7 @@
     padding-left: 10px;
 }
 
-/* Bot es do Rodap  */
+/* Bot�es do Rodap� */
 .modal-footer-btns {
     display: flex;
     gap: 15px;
