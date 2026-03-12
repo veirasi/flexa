@@ -830,12 +830,10 @@ let resumoRevisaoAtual = {
     veiculo: 'Moto'
 };
 
-const TARIFA_POR_KM = {
-    Standard: { Patinete: 1.05, Bicicleta: 1.10, Moto: 1.20, Carro: 1.25, Van: 1.35 },
-    Flash: { Moto: 1.45, Carro: 1.65, Van: 1.95 }
-};
 
 const TAXA_MINIMA = { Standard: 5.0, Flash: 9.0 };
+const DISTANCIA_BASE_KM = 4;
+const VALOR_EXCEDENTE_KM = 1.10;
 
 function getServicoSelecionadoAtual() {
     return document.querySelector('#modal-envio-detalhes .selection-grid .select-box.active strong')?.innerText || 'Standard';
@@ -897,16 +895,18 @@ async function obterEnderecoLojaAtual() {
 
     return formatarEnderecoEstruturado(window.usuarioLogado?.endereco);
 }
-function obterTarifaKm(servico, veiculo) {
-    const tabela = TARIFA_POR_KM[servico] || TARIFA_POR_KM.Standard;
-    return tabela[veiculo] || tabela.Moto || 1.2;
-}
 
-function calcularFreteEstimado({ servico, veiculo, distanciaKm }) {
+function calcularFreteEstimado({ servico, distanciaKm }) {
     const minimo = TAXA_MINIMA[servico] || TAXA_MINIMA.Standard;
-    const tarifaKm = obterTarifaKm(servico, veiculo);
     const distancia = Number.isFinite(distanciaKm) ? Math.max(0, distanciaKm) : 0;
-    return Math.max(minimo, distancia * tarifaKm);
+
+    if (distancia <= DISTANCIA_BASE_KM) {
+        return minimo;
+    }
+
+    const excedenteKm = distancia - DISTANCIA_BASE_KM;
+    const frete = minimo + (excedenteKm * VALOR_EXCEDENTE_KM);
+    return Number(frete.toFixed(2));
 }
 
 function formatarDistancia(distanciaKm) {
