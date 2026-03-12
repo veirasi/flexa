@@ -490,6 +490,21 @@ function voltarParaPasso(p) {
             document.getElementById('srv-flash').classList.remove('active');
             const id = tipo === 'Standard' ? 'srv-std' : 'srv-flash';
             document.getElementById(id).classList.add('active');
+
+            const bloqueadosNoFlash = ['v-patinete', 'v-bike'];
+            const isFlash = tipo === 'Flash';
+
+            bloqueadosNoFlash.forEach((vid) => {
+                const el = document.getElementById(vid);
+                if (!el) return;
+                el.classList.toggle('disabled', isFlash);
+            });
+
+            if (isFlash && (veiculoSelecionado === 'Patinete' || veiculoSelecionado === 'Bicicleta')) {
+                selecionarVeiculo('Moto', null);
+            } else {
+                atualizarPrecoEstimadoAtual();
+            }
         }
 
         function selecionarTamanho(tam) {
@@ -517,7 +532,6 @@ function voltarParaPasso(p) {
         }
 
 function confirmarEnvioFinal() {
-    // Mostra o sucesso dentro do modal
     setModalEnvioStep(4);
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
@@ -527,21 +541,30 @@ function confirmarEnvioFinal() {
             const enviosAtual = Number(clientes[idx].envios || 0) + 1;
             clientes[idx].envios = enviosAtual;
             if (enviosAtual >= 5) clientes[idx].frequente = true;
+
             const historico = Array.isArray(clientes[idx].historico) ? clientes[idx].historico : [];
             const desc = document.getElementById('input-desc')?.value || '';
-            const valor = document.getElementById('input-valor')?.value || '';
-            const servico = document.querySelector('#modal-envio-detalhes .select-box.active strong')?.innerText || '';
+            const servico = resumoRevisaoAtual.servico || getServicoSelecionadoAtual();
             const tamanho = document.querySelector('#modal-envio-detalhes .selection-grid-3 .select-box.active strong')?.innerText || '';
+            const totalFrete = Number.isFinite(resumoRevisaoAtual.totalFrete)
+                ? resumoRevisaoAtual.totalFrete
+                : parseMoedaParaNumero(document.getElementById('input-valor')?.value || 0);
+
             historico.unshift({
-                id: `envio-${Date.now()}`,
+                id: `envio-${Date.now()}` ,
                 criadoEm: Date.now(),
                 descricao: desc,
-                valor,
+                valorFrete: Number(totalFrete.toFixed(2)),
                 servico,
                 tamanho,
-                veiculo: veiculoSelecionado
+                veiculo: resumoRevisaoAtual.veiculo || veiculoSelecionado,
+                distanciaKm: Number.isFinite(resumoRevisaoAtual.distanciaKm) ? Number(resumoRevisaoAtual.distanciaKm.toFixed(2)) : null,
+                duracaoMin: Number.isFinite(resumoRevisaoAtual.duracaoMin) ? Math.round(resumoRevisaoAtual.duracaoMin) : null,
+                origemEndereco: resumoRevisaoAtual.origem || obterEnderecoLojaTexto(),
+                destinoEndereco: resumoRevisaoAtual.destino || document.getElementById('card-endereco')?.innerText || ''
             });
-            clientes[idx].historico = historico.slice(0, 20);
+
+            clientes[idx].historico = historico.slice(0, 50);
             saveClientes();
             renderClientes(document.getElementById('buscar-cliente')?.value || '');
         }
@@ -795,53 +818,202 @@ function salvarNovoCliente() {
             if (aviso) aviso.remove();
         }
 
-let veiculoSelecionado = "Moto"; // Valor padrao
+let veiculoSelecionado = "Moto";
 let veiculoPrecoSelecionado = "R$ 12,50";
+let resumoRevisaoAtual = {
+    origem: '',
+    destino: '',
+    distanciaKm: null,
+    duracaoMin: null,
+    totalFrete: null,
+    servico: 'Standard',
+    veiculo: 'Moto'
+};
+
+const TARIFA_POR_KM = {
+    Standard: { Patinete: 1.05, Bicicleta: 1.10, Moto: 1.20, Carro: 1.25, Van: 1.35 },
+    Flash: { Moto: 1.45, Carro: 1.65, Van: 1.95 }
+};
+
+const TAXA_MINIMA = { Standard: 5.0, Flash: 9.0 };
+
+function getServicoSelecionadoAtual() {
+    return document.querySelector('#modal-envio-detalhes .selection-grid .select-box.active strong')?.innerText || 'Standard';
+}
+
+function parseMoedaParaNumero(valor) {
+    if (valor === null || valor === undefined) return 0;
+    if (typeof valor === 'number') return valor;
+    const limpo = valor.toString().replace('R$', '').trim().replace(/\./g, '').replace(',','.');
+    const numero = Number(limpo);
+    return Number.isFinite(numero) ? numero : 0;
+}
 
 function precoParaInput(preco) {
-    if (!preco) return '';
-    const limpo = preco.toString().replace(/[^\d,]/g, '').trim();
-    if (!limpo) return '';
-    return limpo.replace('.', '').replace(',', '.');
+    const numero = parseMoedaParaNumero(preco);
+    return numero ? numero.toFixed(2) : '';
 }
 
 function precoParaMoeda(preco) {
-    if (!preco) return 'R$ 0,00';
-    if (preco.toString().includes('R$')) return preco;
-    const numero = Number(preco.toString().replace(',', '.'));
-    if (Number.isNaN(numero)) return 'R$ 0,00';
+    const numero = parseMoedaParaNumero(preco);
     return 'R$ ' + numero.toFixed(2).replace('.', ',');
 }
 
+const ROUTING_CONFIG = {
+    mode: 'production',
+    proxyBaseUrl: (window.FLEXA_ROUTING_PROXY_URL || '').trim(),
+    timeoutMs: 10000,
+    allowPublicFallback: true
+};
+
+function formatarEnderecoEstruturado(end) {
+    if (!end) return '';
+    const ruaNum = [end.rua, end.num].filter(Boolean).join(', ');
+    const cidadeUf = [end.cidade, end.uf].filter(Boolean).join('/');
+    const bairro = end.bairro ? ` - ${end.bairro}` : '';
+    return `${ruaNum}${bairro}${cidadeUf ? ` - ${cidadeUf}` : ''}`.trim();
+}
+
+
+function obterEnderecoLojaTexto() {
+    return formatarEnderecoEstruturado(window.usuarioLogado?.endereco);
+}
+
+async function obterEnderecoLojaAtual() {
+    const uid = getUsuarioIdAtual();
+    if (!uid) return '';
+
+    try {
+        const snap = await db.ref(`usuarios/${uid}/endereco`).once('value');
+        const enderecoDb = snap.val();
+        if (enderecoDb) {
+            if (!window.usuarioLogado) window.usuarioLogado = { id: uid };
+            window.usuarioLogado.endereco = enderecoDb;
+            return formatarEnderecoEstruturado(enderecoDb);
+        }
+    } catch (erro) {
+        console.warn('Falha ao carregar endereco do lojista no BD:', erro);
+    }
+
+    return formatarEnderecoEstruturado(window.usuarioLogado?.endereco);
+}
+function obterTarifaKm(servico, veiculo) {
+    const tabela = TARIFA_POR_KM[servico] || TARIFA_POR_KM.Standard;
+    return tabela[veiculo] || tabela.Moto || 1.2;
+}
+
+function calcularFreteEstimado({ servico, veiculo, distanciaKm }) {
+    const minimo = TAXA_MINIMA[servico] || TAXA_MINIMA.Standard;
+    const tarifaKm = obterTarifaKm(servico, veiculo);
+    const distancia = Number.isFinite(distanciaKm) ? Math.max(0, distanciaKm) : 0;
+    return Math.max(minimo, distancia * tarifaKm);
+}
+
+function formatarDistancia(distanciaKm) {
+    if (!Number.isFinite(distanciaKm)) return '--';
+    return `${distanciaKm.toFixed(1).replace('.', ',')} km`;
+}
+
+function formatarDuracao(duracaoMin) {
+    if (!Number.isFinite(duracaoMin)) return '--';
+    if (duracaoMin < 60) return `${Math.max(1, Math.round(duracaoMin))} min`;
+    const horas = Math.floor(duracaoMin / 60);
+    const mins = Math.round(duracaoMin % 60);
+    return mins ? `${horas}h ${mins}min` : `${horas}h`;
+}
+
+async function geocodificarEndereco(endereco) {
+    if (!endereco) return null;
+    const q = encodeURIComponent(`${endereco}, Brasil`);
+    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=br&q=${q}`;
+    const resposta = await fetch(url);
+    if (!resposta.ok) throw new Error('Falha ao geocodificar endereco');
+    const dados = await resposta.json();
+    if (!Array.isArray(dados) || !dados.length) return null;
+    return { lat: Number(dados[0].lat), lon: Number(dados[0].lon) };
+}
+
+async function fetchJsonComTimeout(url, options = {}, timeoutMs = ROUTING_CONFIG.timeoutMs) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    try {
+        const resp = await fetch(url, { ...options, signal: controller.signal });
+        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+        return await resp.json();
+    } finally {
+        clearTimeout(timeout);
+    }
+}
+
+async function estimarRotaPublica(origemEndereco, destinoEndereco) {
+    const [origem, destino] = await Promise.all([
+        geocodificarEndereco(origemEndereco),
+        geocodificarEndereco(destinoEndereco)
+    ]);
+    if (!origem || !destino) return null;
+    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${origem.lon},${origem.lat};${destino.lon},${destino.lat}?overview=false`;
+    const rota = (await fetchJsonComTimeout(osrmUrl))?.routes?.[0];
+    if (!rota) return null;
+    return { distanciaKm: rota.distance / 1000, duracaoMin: rota.duration / 60 };
+}
+
+async function estimarRotaEntrega(origemEndereco, destinoEndereco) {
+    try {
+        const uid = getUsuarioIdAtual();
+        if (ROUTING_CONFIG.proxyBaseUrl) {
+            const base = ROUTING_CONFIG.proxyBaseUrl.replace(/\/$/, '');
+            const json = await fetchJsonComTimeout(`${base}/estimate-route`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tenantId: uid || null,
+                    tenantType: 'lojista',
+                    origemEndereco,
+                    destinoEndereco
+                })
+            });
+            if (Number.isFinite(Number(json?.distanciaKm)) && Number.isFinite(Number(json?.duracaoMin))) {
+                return {
+                    distanciaKm: Number(json.distanciaKm),
+                    duracaoMin: Number(json.duracaoMin)
+                };
+            }
+        }
+
+        if (ROUTING_CONFIG.allowPublicFallback) {
+            return await estimarRotaPublica(origemEndereco, destinoEndereco);
+        }
+        return null;
+    } catch (erro) {
+        console.warn('Nao foi possivel estimar rota (modo producao/fallback):', erro);
+        if (ROUTING_CONFIG.allowPublicFallback) {
+            try { return await estimarRotaPublica(origemEndereco, destinoEndereco); } catch (_) { return null; }
+        }
+        return null;
+    }
+}
+function atualizarPrecoEstimadoAtual() {
+    const servico = getServicoSelecionadoAtual();
+    const distanciaKm = Number.isFinite(resumoRevisaoAtual.distanciaKm) ? resumoRevisaoAtual.distanciaKm : 0;
+    const total = calcularFreteEstimado({ servico, veiculo: veiculoSelecionado, distanciaKm });
+    resumoRevisaoAtual.servico = servico;
+    resumoRevisaoAtual.veiculo = veiculoSelecionado;
+    resumoRevisaoAtual.totalFrete = total;
+    const inputValor = document.getElementById('input-valor');
+    if (inputValor) inputValor.value = total.toFixed(2);
+    const revTotal = document.getElementById('rev-total');
+    if (revTotal) revTotal.innerText = precoParaMoeda(total);
+}
+
 function selecionarVeiculo(tipo, preco) {
-    // Remove active de todos os veiculos
-    const ids = ['v-patinete', 'v-bike', 'v-moto', 'v-carro', 'v-van'];
-    ids.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.classList.remove('active');
-    });
-    
-    // Adiciona no selecionado
-    const slug = tipo.toLowerCase().replace('padrao', '').trim(); // simplificacao de ID se necessario
-    // Aqui usamos um mapeamento simples para os IDs que criamos:
-    const mapaIds = {
-        'Patinete': 'v-patinete', 'Bicicleta': 'v-bike', 'Moto': 'v-moto',
-        'Carro': 'v-carro', 'Van': 'v-van'
-    };
+    const mapaIds = { Patinete: 'v-patinete', Bicicleta: 'v-bike', Moto: 'v-moto', Carro: 'v-carro', Van: 'v-van' };
     const alvo = document.getElementById(mapaIds[tipo]);
+    if (alvo?.classList.contains('disabled')) return;
+    ['v-patinete', 'v-bike', 'v-moto', 'v-carro', 'v-van'].forEach((id) => document.getElementById(id)?.classList.remove('active'));
     if (alvo) alvo.classList.add('active');
     veiculoSelecionado = tipo;
     if (preco) veiculoPrecoSelecionado = preco;
-
-    const inputValor = document.getElementById('input-valor');
-    if (inputValor && preco) {
-        inputValor.value = precoParaInput(preco);
-    }
-
-    const revTotal = document.getElementById('rev-total');
-    if (revTotal && preco) {
-        revTotal.innerText = precoParaMoeda(preco);
-    }
+    atualizarPrecoEstimadoAtual();
 }
 
 function irParaVeiculos() {
@@ -853,29 +1025,34 @@ function voltarParaDetalhes() {
     setModalEnvioStep(1);
 }
 
-// Atualizar a função de Revisão para incluir o veículo
-function irParaRevisao() {
+// Revisao com distancia/tempo e valor estimado
+async function irParaRevisao() {
     const nome = document.getElementById('card-nome').innerText;
-    const endereco = document.getElementById('card-endereco').innerText;
-    
-    // Busca serviço e tamanho dentro do sheet de detalhes
-    const servico = document.querySelector('#modal-envio-detalhes .select-box.active strong').innerText;
-    const tamanho = document.querySelector('#modal-envio-detalhes .selection-grid-3 .select-box.active strong').innerText;
-
-    document.getElementById('rev-nome').innerText = nome;
-    document.getElementById('rev-end').innerText = endereco;
-    document.getElementById('rev-servico').innerText = servico;
-    document.getElementById('rev-tamanho').innerText = "Pacote " + tamanho + " - " + veiculoSelecionado;
-    const totalEl = document.getElementById('rev-total');
-    if (totalEl) {
-        const valorInput = document.getElementById('input-valor')?.value || '';
-        totalEl.innerText = valorInput ? precoParaMoeda(valorInput) : precoParaMoeda(veiculoPrecoSelecionado);
+    const enderecoDestino = document.getElementById('card-endereco').innerText;
+    const enderecoOrigem = await obterEnderecoLojaAtual();
+    const servico = document.querySelector('#modal-envio-detalhes .selection-grid .select-box.active strong')?.innerText || 'Standard';
+    const tamanho = document.querySelector('#modal-envio-detalhes .selection-grid-3 .select-box.active strong')?.innerText || 'P';
+    let distanciaKm = null;
+    let duracaoMin = null;
+    if (enderecoOrigem && enderecoDestino) {
+        const estimativa = await estimarRotaEntrega(enderecoOrigem, enderecoDestino);
+        if (estimativa) { distanciaKm = estimativa.distanciaKm; duracaoMin = estimativa.duracaoMin; }
     }
-
-    // Mostra a revisão dentro do modal
+    const totalFrete = calcularFreteEstimado({ servico, veiculo: veiculoSelecionado, distanciaKm: Number.isFinite(distanciaKm) ? distanciaKm : 0 });
+    resumoRevisaoAtual = { origem: enderecoOrigem, destino: enderecoDestino, distanciaKm, duracaoMin, totalFrete, servico, veiculo: veiculoSelecionado };
+    document.getElementById('rev-nome').innerText = nome;
+    document.getElementById('rev-end').innerText = enderecoDestino;
+    document.getElementById('rev-servico').innerText = servico;
+    document.getElementById('rev-tamanho').innerText = `Pacote ${tamanho} - ${veiculoSelecionado}`;
+    document.getElementById('rev-total').innerText = precoParaMoeda(totalFrete);
+    const revDist = document.getElementById('rev-distancia'); if (revDist) revDist.innerText = formatarDistancia(distanciaKm);
+    const revTempo = document.getElementById('rev-tempo'); if (revTempo) revTempo.innerText = formatarDuracao(duracaoMin);
+    const revOrigem = document.getElementById('rev-origem'); if (revOrigem) revOrigem.innerText = enderecoOrigem || 'Defina o endereco da loja no Perfil';
+    const inputValor = document.getElementById('input-valor'); if (inputValor) inputValor.value = totalFrete.toFixed(2);
     setModalEnvioStep(3);
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
 // Ativa o link de Rotas no menu inferior
 document.querySelector('.nav-item:nth-child(2)').onclick = () => navegar('view-rotas');
 
@@ -1388,3 +1565,268 @@ function salvarEndereco() {
             alert("Erro ao salvar: " + error.message);
         });
 }
+
+
+
+
+
+
+
+/* ===== New Envio Home + Client Sheet ===== */
+function abrirSeletorCliente() {
+    const modal = document.getElementById('modal-seletor-cliente');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => modal.classList.add('is-open'));
+    renderClientesSelector(document.getElementById('buscar-cliente')?.value || '');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function fecharSeletorCliente() {
+    const modal = document.getElementById('modal-seletor-cliente');
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    setTimeout(() => {
+        modal.style.display = 'none';
+    }, 220);
+}
+
+function abrirNovoClientePeloSeletor() {
+    fecharSeletorCliente();
+    setTimeout(() => abrirNovoCliente(), 180);
+}
+
+function renderClientesSelector(filtro = '') {
+    const container = document.getElementById('clientes-sheet-list');
+    if (!container) return;
+
+    const filtroTexto = normalizarTexto(filtro);
+    const filtroNumero = (filtro || '').replace(/\D/g, '');
+
+    const lista = clientes.filter((c) => {
+        const texto = normalizarTexto(`${c.nome} ${c.endereco} ${c.whatsapp}`);
+        if (!filtroTexto) return true;
+        if (filtroNumero && c.whatsapp) {
+            return c.whatsapp.replace(/\D/g, '').includes(filtroNumero);
+        }
+        return texto.includes(filtroTexto);
+    }).sort((a, b) => {
+        const fa = a.frequente ? 1 : 0;
+        const fb = b.frequente ? 1 : 0;
+        if (fb !== fa) return fb - fa;
+        return (a.nome || '').localeCompare(b.nome || '');
+    });
+
+    if (!lista.length) {
+        container.innerHTML = '<div class="selector-empty">Nenhum cliente encontrado.</div>';
+        return;
+    }
+
+    container.innerHTML = lista.map((c) => {
+        const badge = c.frequente ? '<span class="badge-freq selector-freq-badge">Frequente</span>' : '';
+        const iniciais = (c.nome || 'C').split(' ').filter(Boolean).map((n) => n[0]).join('').slice(0, 2).toUpperCase();
+        const foto = c.foto || c.avatar || '';
+        const avatar = foto
+            ? `<img class="selector-avatar-img" src="${foto}" alt="${c.nome || 'Cliente'}">`
+            : `<span class="selector-avatar-iniciais">${iniciais}</span>`;
+
+        return `
+            <button type="button" class="selector-cliente-card" onclick="selecionarClienteNoSheet('${c.id}', '${c.nome.replace(/'/g, "\\'")}', '${c.endereco.replace(/'/g, "\\'")}', '${c.whatsapp.replace(/'/g, "\\'")}')">
+                ${badge}
+                <div class="selector-avatar">${avatar}</div>
+                <div class="selector-info">
+                    <strong class="selector-nome">${c.nome}</strong>
+                    <span class="selector-endereco">${formatEnderecoDisplay(c.endereco)}</span>
+                    <span class="selector-whatsapp">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 448 512" fill="currentColor"><path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.1 0-65.6-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-5.5-2.8-23.2-8.5-44.2-27.1-16.4-14.6-27.4-32.7-30.6-38.2-3.2-5.6-.3-8.6 2.5-11.3 2.5-2.5 5.6-6.5 8.3-9.7 2.8-3.3 3.7-5.6 5.6-9.3 1.9-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 13.2 5.8 23.5 9.2 31.5 11.8 13.3 4.2 25.4 3.6 35 2.2 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"/></svg>
+                        ${c.whatsapp}
+                    </span>
+                </div>
+            </button>
+        `;
+    }).join('');
+}
+function selecionarClienteNoSheet(id, nome, endereco, whats) {
+    fecharSeletorCliente();
+    setTimeout(() => {
+        irParaPasso2(id, nome, endereco, whats);
+    }, 200);
+}
+
+function coletarEnviosDaBase() {
+    const envios = [];
+    clientes.forEach((c) => {
+        const historico = Array.isArray(c.historico) ? c.historico : [];
+        historico.forEach((h, idx) => {
+            envios.push({
+                id: h.id || `envio-${c.id}-${idx}`,
+                codigo: h.id ? h.id.replace('envio-', '').slice(-4) : String(idx + 1).padStart(4, '0'),
+                destinatario: c.nome || 'Cliente',
+                endereco: formatEnderecoDisplay(c.endereco || ''),
+                status: (h.servico || '').toLowerCase().includes('flash') ? 'Expresso' : 'Pendente',
+                valor: Number.isFinite(Number(h.valorFrete)) ? Number(h.valorFrete) : parseMoedaParaNumero(h.valor || 0),
+                servico: h.servico || 'Standard',
+                veiculo: h.veiculo || 'Moto',
+                distanciaKm: Number.isFinite(Number(h.distanciaKm)) ? Number(h.distanciaKm) : null,
+                duracaoMin: Number.isFinite(Number(h.duracaoMin)) ? Number(h.duracaoMin) : null,
+                criadoEm: h.criadoEm || Date.now()
+            });
+        });
+    });
+
+    if (!envios.length) return [];
+
+    return envios.sort((a, b) => b.criadoEm - a.criadoEm);
+}
+
+function renderEnviosHome() {
+    const container = document.getElementById('envios-list');
+    if (!container) return;
+
+    const envios = coletarEnviosDaBase();
+    if (!envios.length) {
+        container.innerHTML = `
+            <div class="envios-empty">
+                <h3>Voce ainda nao tem pacotes para enviar</h3>
+                <button type="button" class="envios-empty-btn" onclick="abrirSeletorCliente()">Criar envio</button>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = envios.map((envio) => {
+        const data = new Date(envio.criadoEm || Date.now()).toLocaleDateString('pt-BR');
+        const valor = Number(envio.valor || 0).toFixed(2).replace('.', ',');
+        const distanciaTxt = Number.isFinite(envio.distanciaKm) ? `${envio.distanciaKm.toFixed(1).replace('.', ',')} km` : '--';
+        const tempoTxt = Number.isFinite(envio.duracaoMin) ? `${Math.max(1, Math.round(envio.duracaoMin))} min` : '--';
+        return `
+            <div class="envio-swipe-container" id="envio-wrap-${envio.id}">
+                <div class="envio-swipe-delete">
+                    <button type="button" onclick="confirmarExclusaoEnvio('${envio.id}')">Excluir</button>
+                </div>
+                <article class="envio-item-card envio-swipe-content"
+                         id="envio-card-${envio.id}"
+                         data-envio-id="${envio.id}"
+                         ontouchstart="handleEnvioTouchStart(event)"
+                         ontouchmove="handleEnvioTouchMove(event)"
+                         ontouchend="handleEnvioTouchEnd(event)">
+                    <button class="envio-delete-btn" type="button" onclick="confirmarExclusaoEnvio('${envio.id}'); event.stopPropagation();">
+                        <i data-lucide="trash-2" size="14"></i>
+                    </button>
+                    <div class="envio-item-top">
+                        <div>
+                            <div class="envio-item-kicker">Pedido #${envio.codigo}</div>
+                            <div class="envio-item-name">${envio.destinatario}</div>
+                        </div>
+                        <div>
+                            <div class="envio-item-status">${envio.status}</div>
+                        </div>
+                    </div>
+                    <div class="envio-item-meta">${envio.endereco}</div>
+                    <div class="envio-item-route">${envio.servico} • ${envio.veiculo} • ${distanciaTxt} • ${tempoTxt}</div>
+                    <div class="envio-item-top" style="margin-bottom:0; align-items:flex-end; margin-top:8px;">
+                        <div class="envio-item-meta">Atualizado ${data}</div>
+                        <div>
+                            <div class="envio-item-price">R$ ${valor}</div>
+                        </div>
+                    </div>
+                </article>
+            </div>
+        `;
+    }).join('');
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function excluirEnvioPorId(envioId) {
+    for (const cliente of clientes) {
+        const historico = Array.isArray(cliente.historico) ? cliente.historico : [];
+        const idx = historico.findIndex((h) => h.id === envioId);
+        if (idx >= 0) {
+            historico.splice(idx, 1);
+            cliente.historico = historico;
+            cliente.envios = Math.max(0, Number(cliente.envios || 0) - 1);
+            return true;
+        }
+    }
+    return false;
+}
+
+function confirmarExclusaoEnvio(envioId) {
+    if (!envioId) return;
+    const ok = window.confirm('Deseja excluir este envio?');
+    if (!ok) return;
+    const removido = excluirEnvioPorId(envioId);
+    if (!removido) {
+        alert('Não foi possível excluir este envio.');
+        return;
+    }
+    saveClientes();
+    renderEnviosHome();
+}
+
+let envioTouchStartX = 0;
+let envioCardAtivo = null;
+
+function handleEnvioTouchStart(e) {
+    envioCardAtivo = e.currentTarget;
+    envioTouchStartX = e.touches[0].clientX;
+    fecharSwipesEnvio(envioCardAtivo.id);
+}
+
+function handleEnvioTouchMove(e) {
+    if (!envioCardAtivo) return;
+    const diff = e.touches[0].clientX - envioTouchStartX;
+    if (diff > 0) {
+        envioCardAtivo.style.transform = 'translateX(0)';
+        return;
+    }
+    const limitado = Math.max(diff, -92);
+    envioCardAtivo.style.transform = `translateX(${limitado}px)`;
+}
+
+function handleEnvioTouchEnd(e) {
+    if (!envioCardAtivo) return;
+    const diff = e.changedTouches[0].clientX - envioTouchStartX;
+    envioCardAtivo.style.transition = 'transform 0.22s ease';
+    envioCardAtivo.style.transform = diff < -52 ? 'translateX(-92px)' : 'translateX(0)';
+    setTimeout(() => {
+        if (envioCardAtivo) envioCardAtivo.style.transition = '';
+    }, 220);
+    envioCardAtivo = null;
+}
+
+function fecharSwipesEnvio(exceptId = null) {
+    document.querySelectorAll('.envio-swipe-content').forEach((el) => {
+        if (exceptId && el.id === exceptId) return;
+        el.style.transform = 'translateX(0)';
+        el.style.transition = 'transform 0.2s ease';
+        setTimeout(() => { el.style.transition = ''; }, 220);
+    });
+}
+
+const _initClientesOriginal = initClientes;
+initClientes = async function initClientesNovaHome() {
+    await _initClientesOriginal();
+    renderClientesSelector(document.getElementById('buscar-cliente')?.value || '');
+    renderEnviosHome();
+};
+
+const _confirmarEnvioFinalOriginal = confirmarEnvioFinal;
+confirmarEnvioFinal = function confirmarEnvioFinalNovaHome() {
+    _confirmarEnvioFinalOriginal();
+    renderEnviosHome();
+};
+
+const _abrirNovoClienteOriginal = abrirNovoCliente;
+abrirNovoCliente = function abrirNovoClienteComSheet() {
+    fecharSeletorCliente();
+    _abrirNovoClienteOriginal();
+};
+
+renderClientes = function renderClientesRedirect(filtro = '') {
+    renderClientesSelector(filtro);
+};
+
+
+
