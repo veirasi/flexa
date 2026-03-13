@@ -150,6 +150,18 @@
     </div>
 </div>
 
+<div id="modal-acoes-cliente" class="modal-perfil-overlay" onclick="fecharModalAcoesCliente()">
+    <div class="modal-perfil-sheet cliente-actions-sheet" onclick="event.stopPropagation()">
+        <div class="selector-sheet-handle"></div>
+        <div class="cliente-actions-head-row">
+            <div class="cliente-actions-header" id="cliente-actions-name">Cliente</div>
+            <button type="button" class="cliente-actions-close" onclick="fecharModalAcoesCliente()">×</button>
+        </div>
+        <button type="button" class="cliente-actions-item" onclick="abrirHistoricoDoClienteAtual()">Ver Histórico</button>
+        <button type="button" class="cliente-actions-item danger" onclick="excluirClienteAtualComConfirmacao()">Excluir</button>
+    </div>
+</div>
+
 <section id="view-perfil" class="view">
     <div class="perfil-header" style="text-align:center; padding:30px 20px;">
         <div class="avatar-wrapper" style="width:110px; height:110px; margin:0 auto 15px; position:relative;">
@@ -701,6 +713,9 @@
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+    <script>
+      window.FLEXA_GOOGLE_MAPS_KEY = "AIzaSyDgO6wu3gbsZYIYb1KxGOpZGZIb2pM-YAk";
+    </script>
     <script src="app.js"></script>
 </body>
 </html>

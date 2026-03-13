@@ -1,4 +1,4 @@
-﻿// ===================== [CONFIG & ESTADO GLOBAL] =====================
+// ===================== [CONFIG & ESTADO GLOBAL] =====================
 const firebaseConfig = {
   apiKey: "AIzaSyBNsTcLawc8VaILryw36F5Iv6tIK0N41Og",
   authDomain: "flexa-app-41205.firebaseapp.com",
@@ -19,6 +19,11 @@ let clientes = [];
 let clienteEmEdicaoId = null;
 let clienteSelecionadoId = null;
 let editRevealTimeout = null;
+let cepLojaDebounceTimer = null;
+let ultimoCepLojaConsultado = '';
+let ultimoErroRota = null;
+let googleMapsLoaderPromise = null;
+const FORCAR_REGEOCODIFICACAO = true;
 
 function getUsuarioIdAtual() {
     return usuarioLogado?.id || (firebase.auth().currentUser ? firebase.auth().currentUser.uid : null);
@@ -30,7 +35,13 @@ async function loadClientes() {
         const snap = await db.ref(`usuarios/${uid}/clientes`).once('value');
         const data = snap.val();
         if (data) {
-            return Object.keys(data).map((id) => ({ id, ...data[id] }));
+            return Object.keys(data).map((id) => {
+                const c = { id, ...data[id] };
+                if (!c.geo && Number.isFinite(Number(c.lat)) && Number.isFinite(Number(c.lon))) {
+                    c.geo = { lat: Number(c.lat), lon: Number(c.lon), updatedAt: Date.now() };
+                }
+                return c;
+            });
         }
     }
     return [
@@ -140,6 +151,168 @@ function formatEnderecoDisplay(endereco) {
         return `${ruaNum} - ${cidade.trim()}`;
     }
     return ruaNum;
+}
+
+function normalizarUf(valor) {
+    const letras = (valor || '').toString().toUpperCase().replace(/[^A-Z]/g, '');
+    return letras.slice(0, 2);
+}
+
+function formatarCep(valor) {
+    const digits = (valor || '').toString().replace(/\D/g, '').slice(0, 8);
+    if (digits.length !== 8) return '';
+    return `${digits.slice(0, 5)}-${digits.slice(5)}`;
+}
+
+function montarEnderecoCliente({ rua, num, bairro, cidade, estado, comp }) {
+    const uf = normalizarUf(estado);
+    const partes = [];
+    const ruaNum = [rua, num].map((v) => (v || '').trim()).filter(Boolean).join(', ');
+    if (ruaNum) partes.push(ruaNum);
+    const bairroCidade = [(bairro || '').trim(), (cidade || '').trim()].filter(Boolean).join(', ');
+    if (bairroCidade || uf) partes.push(`${bairroCidade}${uf ? `/${uf}` : ''}`.trim());
+    let endereco = partes.join(' - ');
+    const complemento = (comp || '').trim();
+    if (complemento) endereco += ` (${complemento})`;
+    return endereco.trim();
+}
+
+function assinaturaEndereco(campos = {}) {
+    const cep = formatarCep(campos.cep || '');
+    const rua = (campos.rua || '').toString().trim().toLowerCase();
+    const num = (campos.num || '').toString().trim().toLowerCase();
+    const bairro = (campos.bairro || '').toString().trim().toLowerCase();
+    const cidade = (campos.cidade || '').toString().trim().toLowerCase();
+    const uf = normalizarUf(campos.uf || campos.estado || '');
+    return [cep, rua, num, bairro, cidade, uf].join('|');
+}
+
+function geoNoBrasil(geo) {
+    const g = normalizarGeo(geo);
+    if (!g) return false;
+    return g.lat >= -35 && g.lat <= 6 && g.lon >= -75 && g.lon <= -30;
+}
+
+function extrairCamposEnderecoCliente(cliente) {
+    const campos = {
+        cep: formatarCep(cliente?.cep),
+        rua: (cliente?.rua || '').trim(),
+        num: (cliente?.num || '').trim(),
+        bairro: (cliente?.bairro || '').trim(),
+        cidade: (cliente?.cidade || '').trim(),
+        estado: normalizarUf(cliente?.estado || cliente?.uf || ''),
+        comp: (cliente?.comp || '').trim()
+    };
+    if (campos.rua && campos.num) return campos;
+
+    const txt = (cliente?.endereco || '').toString().trim();
+    if (!txt) return campos;
+
+    const regex = /^(.*?),\s*(.*?)\s*-\s*(.*?),\s*(.*?)\/([A-Za-z]{2})(?:\s*\((.*?)\))?$/;
+    const m = txt.match(regex);
+    if (m) {
+        campos.rua = campos.rua || (m[1] || '').trim();
+        campos.num = campos.num || (m[2] || '').trim();
+        campos.bairro = campos.bairro || (m[3] || '').trim();
+        campos.cidade = campos.cidade || (m[4] || '').trim();
+        campos.estado = campos.estado || normalizarUf(m[5] || '');
+        campos.comp = campos.comp || (m[6] || '').trim();
+        return campos;
+    }
+
+    const primeiraParte = txt.split(' - ')[0] || '';
+    const ruaNum = primeiraParte.split(',');
+    if (!campos.rua) campos.rua = (ruaNum[0] || '').trim();
+    if (!campos.num) campos.num = (ruaNum[1] || '').trim();
+    return campos;
+}
+
+function montarEnderecoParaCalculo(cliente, fallbackEndereco = '') {
+    const campos = extrairCamposEnderecoCliente(cliente || {});
+    const base = montarEnderecoCliente(campos);
+    const cep = formatarCep(campos.cep);
+    if (base && cep) return `${base} - CEP ${cep}`;
+    return base || fallbackEndereco || '';
+}
+
+function normalizarGeo(geo) {
+    if (!geo) return null;
+    const lat = Number(geo.lat);
+    const lon = Number(geo.lon);
+    if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+    return { lat, lon, updatedAt: geo.updatedAt || Date.now() };
+}
+
+async function geocodificarPorCampos(campos = {}) {
+    if (!GOOGLE_MAPS_KEY) return null;
+    const rua = (campos.rua || '').toString().trim();
+    const num = (campos.num || '').toString().trim();
+    const bairro = (campos.bairro || '').toString().trim();
+    const cidade = (campos.cidade || '').toString().trim();
+    const estado = normalizarUf(campos.uf || campos.estado || '');
+    const cep = formatarCep(campos.cep || '');
+    const enderecoGoogle = [rua, num, bairro, cidade, estado, cep, 'Brasil'].filter(Boolean).join(', ');
+
+    try {
+        const maps = await carregarGoogleMapsJs();
+        const geocoder = new maps.Geocoder();
+        const resultado = await new Promise((resolve) => {
+            const restricoes = { country: 'BR' };
+            if (cep) restricoes.postalCode = cep;
+            if (cidade) restricoes.locality = cidade;
+            if (estado) restricoes.administrativeArea = estado;
+            geocoder.geocode(
+                {
+                    address: enderecoGoogle,
+                    componentRestrictions: restricoes
+                },
+                (results, status) => resolve({ results, status })
+            );
+        });
+        const primeiro = resultado?.results?.[0] || null;
+        const loc = primeiro?.geometry?.location;
+        if (resultado?.status === 'OK' && loc) {
+            const geo = { lat: Number(loc.lat()), lon: Number(loc.lng()) };
+            if (!geoNoBrasil(geo)) {
+                setUltimoErroRota('Geocode retornou coordenada fora do Brasil.', { status: resultado?.status, enderecoGoogle, geo });
+                return null;
+            }
+            const cityEsperada = normalizarTexto(cidade || '');
+            const ufEsperada = normalizarUf(estado || '');
+            if (cityEsperada || ufEsperada) {
+                const comps = Array.isArray(primeiro?.address_components) ? primeiro.address_components : [];
+                const cityComp = normalizarTexto((comps.find(c => c.types?.includes('administrative_area_level_2'))?.long_name || comps.find(c => c.types?.includes('locality'))?.long_name || ''));
+                const ufComp = normalizarUf(comps.find(c => c.types?.includes('administrative_area_level_1'))?.short_name || '');
+                const cidadeOk = !cityEsperada || (cityComp && (cityComp.includes(cityEsperada) || cityEsperada.includes(cityComp)));
+                const ufOk = !ufEsperada || (ufComp === ufEsperada);
+                if (!cidadeOk || !ufOk) {
+                    setUltimoErroRota('Geocode retornou local divergente do endereco informado.', {
+                        enderecoGoogle,
+                        cityEsperada,
+                        ufEsperada,
+                        cityComp,
+                        ufComp,
+                        formatted: primeiro?.formatted_address || null
+                    });
+                    return null;
+                }
+            }
+            return geo;
+        }
+        setUltimoErroRota('Google Geocoding por campos falhou.', { status: resultado?.status || null, enderecoGoogle });
+        return null;
+    } catch (erro) {
+        setUltimoErroRota('Falha no Google Geocoding por campos.', erro?.message || String(erro));
+        return null;
+    }
+}
+
+function getClienteById(id) {
+    return clientes.find((c) => c.id === id) || null;
+}
+
+function getGeoCliente(cliente) {
+    return normalizarGeo(cliente?.geo);
 }
 
 function revealEditButton(cardEl) {
@@ -323,23 +496,14 @@ function abrirEditarCliente(id) {
     clienteEmEdicaoId = id;
     document.getElementById('new-cli-nome').value = cliente.nome || '';
     document.getElementById('new-cli-tel').value = cliente.whatsapp || '';
-
-    const parts = (cliente.endereco || '').split(' - ');
-    const ruaNum = parts[0] || '';
-    const bairroCidade = parts[1] || '';
-    const [rua, num] = ruaNum.split(',').map(s => s.trim());
-    document.getElementById('new-cli-rua').value = rua || '';
-    document.getElementById('new-cli-num').value = num || '';
-
-    const bairroParts = bairroCidade.split(',');
-    document.getElementById('new-cli-bairro').value = (bairroParts[0] || '').trim();
-
-    const cidadeUf = (bairroParts[1] || '').trim();
-    if (cidadeUf.includes('/')) {
-        const [cidade, uf] = cidadeUf.split('/');
-        document.getElementById('new-cli-cidade').value = (cidade || '').trim();
-        document.getElementById('new-cli-estado').value = (uf || '').trim();
-    }
+    const campos = extrairCamposEnderecoCliente(cliente);
+    document.getElementById('new-cli-cep').value = campos.cep || '';
+    document.getElementById('new-cli-rua').value = campos.rua || '';
+    document.getElementById('new-cli-num').value = campos.num || '';
+    document.getElementById('new-cli-bairro').value = campos.bairro || '';
+    document.getElementById('new-cli-cidade').value = campos.cidade || '';
+    document.getElementById('new-cli-estado').value = campos.estado || '';
+    document.getElementById('new-cli-comp').value = campos.comp || '';
 
     document.getElementById('novo-cliente-title').innerText = 'Editar Cliente';
     document.getElementById('btn-salvar-cliente').innerText = 'Salvar Alterações';
@@ -458,10 +622,21 @@ function handleEnvioBack() {
         /* L?"GICA DE PASSOS DO ENVIO */
         function irParaPasso2(id, nome, endereco, whats) {
     clienteSelecionadoId = id;
+    const cliente = getClienteById(id);
     // Preenche os dados
     document.getElementById('card-nome').innerText = nome;
     document.getElementById('card-endereco').innerText = endereco;
     document.getElementById('card-whatsapp').innerText = whats;
+    resumoRevisaoAtual.destino = montarEnderecoParaCalculo(cliente, endereco);
+    resumoRevisaoAtual.destinoGeo = getGeoCliente(cliente);
+    resumoRevisaoAtual.origemGeo = normalizarGeo(window.usuarioLogado?.endereco?.geo);
+    resumoRevisaoAtual.distanciaKm = null;
+    resumoRevisaoAtual.duracaoMin = null;
+
+    // Para base legada sem coordenadas, tenta geocodificar em segundo plano.
+    if (cliente && !resumoRevisaoAtual.destinoGeo) {
+        garantirGeoClienteSelecionado().catch(() => {});
+    }
 
     // Abre o modal sheet de detalhes (passo 1)
     abrirModalEnvioDetalhes();
@@ -490,21 +665,7 @@ function voltarParaPasso(p) {
             document.getElementById('srv-flash').classList.remove('active');
             const id = tipo === 'Standard' ? 'srv-std' : 'srv-flash';
             document.getElementById(id).classList.add('active');
-
-            const bloqueadosNoFlash = ['v-patinete', 'v-bike'];
-            const isFlash = tipo === 'Flash';
-
-            bloqueadosNoFlash.forEach((vid) => {
-                const el = document.getElementById(vid);
-                if (!el) return;
-                el.classList.toggle('disabled', isFlash);
-            });
-
-            if (isFlash && (veiculoSelecionado === 'Patinete' || veiculoSelecionado === 'Bicicleta')) {
-                selecionarVeiculo('Moto', null);
-            } else {
-                atualizarPrecoEstimadoAtual();
-            }
+            atualizarPrecoEstimadoAtual();
         }
 
         function selecionarTamanho(tam) {
@@ -588,9 +749,10 @@ document.getElementById('new-cli-cep').addEventListener('input', function (e) {
 });
 
 // --- FUN - fO SALVAR ?sNICA E CORRIGIDA ---
-function salvarNovoCliente() {
+async function salvarNovoCliente() {
     const nome = document.getElementById('new-cli-nome').value;
     const tel = document.getElementById('new-cli-tel').value;
+    const cep = document.getElementById('new-cli-cep').value;
     const rua = document.getElementById('new-cli-rua').value;
     const num = document.getElementById('new-cli-num').value;
     const bairro = document.getElementById('new-cli-bairro').value;
@@ -599,8 +761,9 @@ function salvarNovoCliente() {
     const comp = document.getElementById('new-cli-comp').value;
 
     if(nome && tel && rua && num) {
-        // Formata o endereço para a tela de detalhes
-        const enderecoCompleto = `${rua}, ${num} - ${bairro}, ${cidade}/${estado}${comp ? ' ('+comp+')' : ''}`;
+        const enderecoCompleto = montarEnderecoCliente({ rua, num, bairro, cidade, estado, comp });
+        const ufNormalizada = normalizarUf(estado);
+        const cepLimpo = formatarCep(cep);
 
         if (clienteEmEdicaoId) {
             const idx = clientes.findIndex(c => c.id === clienteEmEdicaoId);
@@ -609,10 +772,23 @@ function salvarNovoCliente() {
                     ...clientes[idx],
                     nome: nome.trim(),
                     endereco: enderecoCompleto,
-                    whatsapp: tel.trim()
+                    whatsapp: tel.trim(),
+                    cep: cepLimpo,
+                    rua: (rua || '').trim(),
+                    num: (num || '').trim(),
+                    bairro: (bairro || '').trim(),
+                    cidade: (cidade || '').trim(),
+                    uf: ufNormalizada,
+                estado: ufNormalizada,
+                    comp: (comp || '').trim()
                 };
+                const geo = await geocodificarCliente(clientes[idx]).catch(() => null);
+                if (geo) {
+                    clientes[idx].geo = normalizarGeo(geo);
+                    clientes[idx].geoSig = assinaturaEndereco(clientes[idx]);
+                }
             }
-            saveClientes();
+            await saveClientes();
             renderClientes(document.getElementById('buscar-cliente')?.value || '');
             clienteSelecionadoId = clienteEmEdicaoId;
         } else {
@@ -621,11 +797,24 @@ function salvarNovoCliente() {
                 nome: nome.trim(),
                 endereco: enderecoCompleto,
                 whatsapp: tel.trim(),
+                cep: cepLimpo,
+                rua: (rua || '').trim(),
+                num: (num || '').trim(),
+                bairro: (bairro || '').trim(),
+                cidade: (cidade || '').trim(),
+                uf: ufNormalizada,
+                estado: ufNormalizada,
+                comp: (comp || '').trim(),
                 frequente: false,
                 envios: 0
             };
+            const geo = await geocodificarCliente(novoCliente).catch(() => null);
+            if (geo) {
+                novoCliente.geo = normalizarGeo(geo);
+                novoCliente.geoSig = assinaturaEndereco(novoCliente);
+            }
             clientes.unshift(novoCliente);
-            saveClientes();
+            await saveClientes();
             renderClientes(document.getElementById('buscar-cliente')?.value || '');
             clienteSelecionadoId = novoCliente.id;
         }
@@ -823,6 +1012,8 @@ let veiculoPrecoSelecionado = "R$ 12,50";
 let resumoRevisaoAtual = {
     origem: '',
     destino: '',
+    origemGeo: null,
+    destinoGeo: null,
     distanciaKm: null,
     duracaoMin: null,
     totalFrete: null,
@@ -832,8 +1023,26 @@ let resumoRevisaoAtual = {
 
 
 const TAXA_MINIMA = { Standard: 5.0, Flash: 9.0 };
-const DISTANCIA_BASE_KM = 4;
-const VALOR_EXCEDENTE_KM = 1.10;
+const TAXA_POR_KM = { Standard: 1.10, Flash: 1.99 };
+const DISTANCIA_MINIMA_KM = 4;
+const AJUSTE_VEICULO_POR_SERVICO = {
+    Standard: {
+        Patinete: -0.8,
+        Bicicleta: -0.6,
+        Moto: 0,
+        Carro: 5,
+        Van: 8
+    },
+    Flash: {
+        Patinete: 0,
+        Bicicleta: 0,
+        Moto: 0,
+        Carro: 8,
+        Van: 12
+    }
+};
+const DISTANCIA_MAX_CURTA = 3;
+const VEICULOS_CURTOS = ['Patinete', 'Bicicleta'];
 
 function getServicoSelecionadoAtual() {
     return document.querySelector('#modal-envio-detalhes .selection-grid .select-box.active strong')?.innerText || 'Standard';
@@ -857,12 +1066,7 @@ function precoParaMoeda(preco) {
     return 'R$ ' + numero.toFixed(2).replace('.', ',');
 }
 
-const ROUTING_CONFIG = {
-    mode: 'production',
-    proxyBaseUrl: (window.FLEXA_ROUTING_PROXY_URL || '').trim(),
-    timeoutMs: 10000,
-    allowPublicFallback: true
-};
+const GOOGLE_MAPS_KEY = (window.FLEXA_GOOGLE_MAPS_KEY || '').trim();
 
 function formatarEnderecoEstruturado(end) {
     if (!end) return '';
@@ -870,6 +1074,34 @@ function formatarEnderecoEstruturado(end) {
     const cidadeUf = [end.cidade, end.uf].filter(Boolean).join('/');
     const bairro = end.bairro ? ` - ${end.bairro}` : '';
     return `${ruaNum}${bairro}${cidadeUf ? ` - ${cidadeUf}` : ''}`.trim();
+}
+
+function formatarEnderecoLojaParaCalculo(end) {
+    const base = formatarEnderecoEstruturado(end);
+    const cep = formatarCep(end?.cep);
+    if (base && cep) return `${base} - CEP ${cep}`;
+    return base;
+}
+
+function formatarEnderecoLojaParaRota(end) {
+    if (!end) return '';
+    const cep = formatarCep(end.cep || '');
+    return [end.rua, end.num, end.bairro, end.cidade, normalizarUf(end.uf || end.estado), cep, 'Brasil']
+        .map((v) => (v || '').toString().trim())
+        .filter(Boolean)
+        .join(', ');
+}
+
+function formatarEnderecoClienteParaRota(cliente, fallbackEndereco = '') {
+    const campos = extrairCamposEnderecoCliente(cliente || {});
+    const cep = formatarCep(campos.cep || '');
+    const enderecoRota = [campos.rua, campos.num, campos.bairro, campos.cidade, normalizarUf(campos.estado || campos.uf), cep, 'Brasil']
+        .map((v) => (v || '').toString().trim())
+        .filter(Boolean)
+        .join(', ');
+    if (enderecoRota) return enderecoRota;
+    const fallback = (fallbackEndereco || '').toString().trim();
+    return fallback ? `${fallback}, Brasil` : '';
 }
 
 
@@ -896,17 +1128,20 @@ async function obterEnderecoLojaAtual() {
     return formatarEnderecoEstruturado(window.usuarioLogado?.endereco);
 }
 
-function calcularFreteEstimado({ servico, distanciaKm }) {
+function calcularFreteBaseServico({ servico, distanciaKm }) {
     const minimo = TAXA_MINIMA[servico] || TAXA_MINIMA.Standard;
+    const taxaKm = TAXA_POR_KM[servico] || TAXA_POR_KM.Standard;
     const distancia = Number.isFinite(distanciaKm) ? Math.max(0, distanciaKm) : 0;
+    if (distancia <= DISTANCIA_MINIMA_KM) return minimo;
+    return Number((distancia * taxaKm).toFixed(2));
+}
 
-    if (distancia <= DISTANCIA_BASE_KM) {
-        return minimo;
-    }
-
-    const excedenteKm = distancia - DISTANCIA_BASE_KM;
-    const frete = minimo + (excedenteKm * VALOR_EXCEDENTE_KM);
-    return Number(frete.toFixed(2));
+function calcularFreteEstimado({ servico, veiculo, distanciaKm }) {
+    const base = calcularFreteBaseServico({ servico, distanciaKm });
+    const mapaAjusteServico = AJUSTE_VEICULO_POR_SERVICO[servico] || AJUSTE_VEICULO_POR_SERVICO.Standard;
+    const ajuste = mapaAjusteServico?.[veiculo] || 0;
+    const minimoServico = TAXA_MINIMA[servico] || TAXA_MINIMA.Standard;
+    return Number(Math.max(0, minimoServico, base + ajuste).toFixed(2));
 }
 
 function formatarDistancia(distanciaKm) {
@@ -924,71 +1159,292 @@ function formatarDuracao(duracaoMin) {
 
 async function geocodificarEndereco(endereco) {
     if (!endereco) return null;
-    const q = encodeURIComponent(`${endereco}, Brasil`);
-    const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=br&q=${q}`;
-    const resposta = await fetch(url);
-    if (!resposta.ok) throw new Error('Falha ao geocodificar endereco');
-    const dados = await resposta.json();
-    if (!Array.isArray(dados) || !dados.length) return null;
-    return { lat: Number(dados[0].lat), lon: Number(dados[0].lon) };
-}
-
-async function fetchJsonComTimeout(url, options = {}, timeoutMs = ROUTING_CONFIG.timeoutMs) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    if (!GOOGLE_MAPS_KEY) return null;
+    const textoBase = endereco.toString().trim();
     try {
-        const resp = await fetch(url, { ...options, signal: controller.signal });
-        if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
-        return await resp.json();
-    } finally {
-        clearTimeout(timeout);
+        const maps = await carregarGoogleMapsJs();
+        const geocoder = new maps.Geocoder();
+        const resultado = await new Promise((resolve) => {
+            geocoder.geocode(
+                {
+                    address: `${textoBase}, Brasil`,
+                    componentRestrictions: { country: 'BR' }
+                },
+                (results, status) => resolve({ results, status })
+            );
+        });
+        const loc = resultado?.results?.[0]?.geometry?.location;
+        if (resultado?.status === 'OK' && loc) {
+            const geo = { lat: Number(loc.lat()), lon: Number(loc.lng()) };
+            if (geoNoBrasil(geo)) return geo;
+            setUltimoErroRota('Geocode por endereco retornou coordenada fora do Brasil.', { status: resultado?.status, textoBase, geo });
+            return null;
+        }
+        setUltimoErroRota('Google Geocoding por endereco falhou.', { status: resultado?.status || null, textoBase });
+        return null;
+    } catch (erro) {
+        setUltimoErroRota('Falha no Google Geocoding por endereco.', erro?.message || String(erro));
+        return null;
     }
 }
 
-async function estimarRotaPublica(origemEndereco, destinoEndereco) {
-    const [origem, destino] = await Promise.all([
-        geocodificarEndereco(origemEndereco),
-        geocodificarEndereco(destinoEndereco)
-    ]);
-    if (!origem || !destino) return null;
-    const osrmUrl = `https://router.project-osrm.org/route/v1/driving/${origem.lon},${origem.lat};${destino.lon},${destino.lat}?overview=false`;
-    const rota = (await fetchJsonComTimeout(osrmUrl))?.routes?.[0];
-    if (!rota) return null;
-    return { distanciaKm: rota.distance / 1000, duracaoMin: rota.duration / 60 };
+async function geocodificarCliente(cliente) {
+    if (!cliente) return null;
+    const campos = extrairCamposEnderecoCliente(cliente);
+    const porCampos = await geocodificarPorCampos(campos).catch(() => null);
+    if (porCampos) return porCampos;
+    const enderecoCalculo = montarEnderecoParaCalculo(cliente, cliente.endereco || '');
+    return await geocodificarEndereco(enderecoCalculo);
 }
 
-async function estimarRotaEntrega(origemEndereco, destinoEndereco) {
-    try {
-        const uid = getUsuarioIdAtual();
-        if (ROUTING_CONFIG.proxyBaseUrl) {
-            const base = ROUTING_CONFIG.proxyBaseUrl.replace(/\/$/, '');
-            const json = await fetchJsonComTimeout(`${base}/estimate-route`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    tenantId: uid || null,
-                    tenantType: 'lojista',
-                    origemEndereco,
-                    destinoEndereco
-                })
-            });
-            if (Number.isFinite(Number(json?.distanciaKm)) && Number.isFinite(Number(json?.duracaoMin))) {
-                return {
-                    distanciaKm: Number(json.distanciaKm),
-                    duracaoMin: Number(json.duracaoMin)
-                };
+async function garantirGeoClienteSelecionado() {
+    const cliente = getClienteById(clienteSelecionadoId);
+    if (!cliente) return null;
+    const geoAtual = getGeoCliente(cliente);
+    const assinaturaAtual = assinaturaEndereco(extrairCamposEnderecoCliente(cliente));
+    const precisaRegeocodificar = FORCAR_REGEOCODIFICACAO ||
+        !geoAtual ||
+        !geoNoBrasil(geoAtual) ||
+        (!cliente.geoSig) || (cliente.geoSig !== assinaturaAtual);
+    if (!precisaRegeocodificar) return geoAtual;
+
+    const geo = await geocodificarCliente(cliente);
+    if (!geo) return null;
+    const geoNorm = normalizarGeo(geo);
+    if (!geoNorm) return null;
+
+    cliente.geo = geoNorm;
+    cliente.geoSig = assinaturaAtual;
+    await saveClientes();
+    resumoRevisaoAtual.destinoGeo = geoNorm;
+    return geoNorm;
+}
+
+function setUltimoErroRota(msg, detalhe = null) {
+    ultimoErroRota = { msg, detalhe, at: Date.now() };
+}
+
+function limparUltimoErroRota() {
+    ultimoErroRota = null;
+}
+
+function detalheRotaParaTexto(detalhe) {
+    if (!detalhe) return '';
+    if (typeof detalhe === 'string') return detalhe;
+    try { return JSON.stringify(detalhe); } catch (_) { return String(detalhe); }
+}
+
+function carregarGoogleMapsJs() {
+    if (!GOOGLE_MAPS_KEY) return Promise.reject(new Error('GOOGLE_MAPS_KEY ausente'));
+    if (window.google?.maps?.Geocoder) return Promise.resolve(window.google.maps);
+    if (googleMapsLoaderPromise) return googleMapsLoaderPromise;
+
+    googleMapsLoaderPromise = new Promise((resolve, reject) => {
+        const script = document.createElement('script');
+        script.src = `https://maps.googleapis.com/maps/api/js?key=${GOOGLE_MAPS_KEY}&libraries=places`;
+        script.async = true;
+        script.defer = true;
+        script.onload = () => resolve(window.google.maps);
+        script.onerror = () => reject(new Error('Falha ao carregar Google Maps JS'));
+        document.head.appendChild(script);
+    });
+
+    return googleMapsLoaderPromise;
+}
+
+function parseDurationSecondsGoogle(valor) {
+    if (!valor) return NaN;
+    if (typeof valor === 'number') return Number(valor);
+    const txt = String(valor).trim();
+    const m = txt.match(/^([0-9]+(?:\.[0-9]+)?)s$/);
+    if (!m) return NaN;
+    return Number(m[1]);
+}
+
+function montarWaypointRota(endereco, geo = null) {
+    const g = normalizarGeo(geo);
+    if (g) {
+        return {
+            location: {
+                latLng: {
+                    latitude: g.lat,
+                    longitude: g.lon
+                }
             }
+        };
+    }
+    return { address: (endereco || '').toString().trim() };
+}
+
+async function estimarRotaRoutesApi(origemEndereco, destinoEndereco, origemGeo = null, destinoGeo = null) {
+    if (!GOOGLE_MAPS_KEY) return null;
+
+    const body = {
+        origin: montarWaypointRota(origemEndereco, origemGeo),
+        destination: montarWaypointRota(destinoEndereco, destinoGeo),
+        travelMode: 'DRIVE',
+        routingPreference: 'TRAFFIC_UNAWARE',
+        languageCode: 'pt-BR',
+        units: 'METRIC'
+    };
+
+    try {
+        const resp = await fetch('https://routes.googleapis.com/directions/v2:computeRoutes', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-Goog-Api-Key': GOOGLE_MAPS_KEY,
+                'X-Goog-FieldMask': 'routes.distanceMeters,routes.duration'
+            },
+            body: JSON.stringify(body)
+        });
+
+        const raw = await resp.text();
+        let json = null;
+        try { json = raw ? JSON.parse(raw) : null; } catch (_) {}
+
+        if (!resp.ok) {
+            setUltimoErroRota('Google Routes API falhou.', {
+                status: resp.status,
+                body: json || raw || null
+            });
+            return null;
         }
 
-        if (ROUTING_CONFIG.allowPublicFallback) {
-            return await estimarRotaPublica(origemEndereco, destinoEndereco);
+        const route = json?.routes?.[0] || null;
+        const distanceMeters = Number(route?.distanceMeters || NaN);
+        const durationSec = parseDurationSecondsGoogle(route?.duration);
+
+        if (!route || !Number.isFinite(distanceMeters) || !Number.isFinite(durationSec)) {
+            setUltimoErroRota('Google Routes API retornou dados invalidos.', {
+                response: json || raw || null
+            });
+            return null;
         }
+
+        return {
+            distanciaKm: distanceMeters / 1000,
+            duracaoMin: durationSec / 60,
+            originAddress: origemEndereco || null,
+            destinationAddress: destinoEndereco || null
+        };
+    } catch (erro) {
+        setUltimoErroRota('Falha ao chamar Google Routes API.', erro?.message || String(erro));
+        return null;
+    }
+}
+
+function estimativaPlausivel(estimativa) {
+    if (!estimativa) return false;
+    const km = Number(estimativa.distanciaKm);
+    const min = Number(estimativa.duracaoMin);
+    if (!Number.isFinite(km) || !Number.isFinite(min)) return false;
+    if (km <= 0 || min <= 0) return false;
+    if (km > 120 || min > 300) return false;
+    return true;
+}
+
+async function estimarRotaGoogle(origemEndereco, destinoEndereco, origemGeo = null, destinoGeo = null) {
+    // 100% Routes API: tentativa por endereco + fallback Routes por coordenadas.
+    const estimativaRoutes = await estimarRotaRoutesApi(origemEndereco, destinoEndereco, origemGeo, destinoGeo);
+    if (estimativaRoutes) {
+        if (estimativaPlausivel(estimativaRoutes)) return estimativaRoutes;
+        setUltimoErroRota('Rota por endereco fora da faixa plausivel.', {
+            origemEndereco,
+            destinoEndereco,
+            distanciaKm: estimativaRoutes.distanciaKm,
+            duracaoMin: estimativaRoutes.duracaoMin,
+            originAddress: estimativaRoutes.originAddress || null,
+            destinationAddress: estimativaRoutes.destinationAddress || null
+        });
+        return null;
+    }
+
+    const origem = normalizarGeo(origemGeo) || await geocodificarEndereco(origemEndereco);
+    const destino = normalizarGeo(destinoGeo) || await geocodificarEndereco(destinoEndereco);
+    if (!origem || !destino) {
+        setUltimoErroRota('Endereco de origem ou destino invalido/incompleto para roteamento.', {
+            origemEndereco,
+            destinoEndereco,
+            origemGeo: origem || null,
+            destinoGeo: destino || null
+        });
+        return null;
+    }
+
+    const estimativaRoutesPorGeo = await estimarRotaRoutesApi(origemEndereco, destinoEndereco, origem, destino);
+    if (estimativaRoutesPorGeo) {
+        if (estimativaPlausivel(estimativaRoutesPorGeo)) return estimativaRoutesPorGeo;
+        setUltimoErroRota('Rota por coordenadas fora da faixa plausivel.', {
+            origem,
+            destino,
+            distanciaKm: estimativaRoutesPorGeo.distanciaKm,
+            duracaoMin: estimativaRoutesPorGeo.duracaoMin,
+            originAddress: estimativaRoutesPorGeo.originAddress || null,
+            destinationAddress: estimativaRoutesPorGeo.destinationAddress || null
+        });
+    }
+    return null;
+}
+
+async function garantirEstimativaAtual() {
+    const destino = (resumoRevisaoAtual.destino || document.getElementById('card-endereco')?.innerText || '').trim();
+    await obterEnderecoLojaAtual();
+    const origemDisplay = formatarEnderecoLojaParaCalculo(window.usuarioLogado?.endereco) || '';
+    const origemRota = formatarEnderecoLojaParaRota(window.usuarioLogado?.endereco) || '';
+    const clienteSelecionado = getClienteById(clienteSelecionadoId);
+    const destinoRota = formatarEnderecoClienteParaRota(clienteSelecionado, destino);
+    let origemGeo = normalizarGeo(window.usuarioLogado?.endereco?.geo);
+    const assinaturaOrigemAtual = assinaturaEndereco(window.usuarioLogado?.endereco || {});
+    const origemGeoSig = window.usuarioLogado?.endereco?.geoSig || '';
+    const origemPrecisaRegeocodificar = FORCAR_REGEOCODIFICACAO ||
+        !origemGeo ||
+        !geoNoBrasil(origemGeo) ||
+        (!origemGeoSig) || (origemGeoSig !== assinaturaOrigemAtual);
+    if (origemPrecisaRegeocodificar && window.usuarioLogado?.endereco) {
+        const geoLoja = await geocodificarPorCampos(window.usuarioLogado.endereco).catch(() => null);
+        origemGeo = normalizarGeo(geoLoja);
+        if (origemGeo) {
+            window.usuarioLogado.endereco.geo = origemGeo;
+            window.usuarioLogado.endereco.geoSig = assinaturaOrigemAtual;
+            const uid = getUsuarioIdAtual();
+            if (uid) db.ref(`usuarios/${uid}/endereco`).update({ geo: origemGeo, geoSig: assinaturaOrigemAtual }).catch(() => {});
+        }
+    }
+    let destinoGeo = resumoRevisaoAtual.destinoGeo;
+    if (FORCAR_REGEOCODIFICACAO || !destinoGeo) destinoGeo = await garantirGeoClienteSelecionado().catch(() => null);
+
+    if (origemDisplay) resumoRevisaoAtual.origem = origemDisplay;
+    if (destino) resumoRevisaoAtual.destino = destino;
+    if (origemGeo) resumoRevisaoAtual.origemGeo = origemGeo;
+    if (destinoGeo) resumoRevisaoAtual.destinoGeo = destinoGeo;
+
+    if (!origemRota || !destinoRota) return null;
+
+    const estimativa = await estimarRotaEntrega(origemRota, destinoRota, origemGeo, destinoGeo);
+    if (estimativa) {
+        resumoRevisaoAtual.distanciaKm = Number(estimativa.distanciaKm);
+        resumoRevisaoAtual.duracaoMin = Number(estimativa.duracaoMin);
+    } else {
+        resumoRevisaoAtual.distanciaKm = null;
+        resumoRevisaoAtual.duracaoMin = null;
+    }
+    return estimativa;
+}
+
+async function estimarRotaEntrega(origemEndereco, destinoEndereco, origemGeo = null, destinoGeo = null) {
+    limparUltimoErroRota();
+    if (!GOOGLE_MAPS_KEY) {
+        setUltimoErroRota('Google Maps API key ausente.');
+        return null;
+    }
+    try {
+        const estimativa = await estimarRotaGoogle(origemEndereco, destinoEndereco, origemGeo, destinoGeo);
+        if (estimativa) return estimativa;
+        if (!ultimoErroRota) setUltimoErroRota('Google Maps não conseguiu calcular a rota com os endereços informados.');
         return null;
     } catch (erro) {
-        console.warn('Nao foi possivel estimar rota (modo producao/fallback):', erro);
-        if (ROUTING_CONFIG.allowPublicFallback) {
-            try { return await estimarRotaPublica(origemEndereco, destinoEndereco); } catch (_) { return null; }
-        }
+        setUltimoErroRota('Falha ao consultar Google Maps.', erro?.message || String(erro));
         return null;
     }
 }
@@ -1003,6 +1459,47 @@ function atualizarPrecoEstimadoAtual() {
     if (inputValor) inputValor.value = total.toFixed(2);
     const revTotal = document.getElementById('rev-total');
     if (revTotal) revTotal.innerText = precoParaMoeda(total);
+    atualizarPrecosCardsVeiculo(servico, distanciaKm);
+    atualizarDisponibilidadeVeiculos(distanciaKm);
+}
+
+function atualizarPrecosCardsVeiculo(servico, distanciaKm) {
+    const mapa = {
+        Patinete: 'v-patinete',
+        Bicicleta: 'v-bike',
+        Moto: 'v-moto',
+        Carro: 'v-carro',
+        Van: 'v-van'
+    };
+
+    Object.entries(mapa).forEach(([veiculo, id]) => {
+        const card = document.getElementById(id);
+        if (!card) return;
+        const precoEl = card.querySelector('.veiculo-preco');
+        if (!precoEl) return;
+        const valor = calcularFreteEstimado({ servico, veiculo, distanciaKm });
+        precoEl.innerText = precoParaMoeda(valor);
+    });
+}
+
+function atualizarDisponibilidadeVeiculos(distanciaKm) {
+    const distancia = Number.isFinite(distanciaKm) ? distanciaKm : 0;
+    const precisaBloquearCurtos = distancia > DISTANCIA_MAX_CURTA;
+    const mapa = {
+        Patinete: 'v-patinete',
+        Bicicleta: 'v-bike'
+    };
+
+    VEICULOS_CURTOS.forEach((veiculo) => {
+        const id = mapa[veiculo];
+        const el = document.getElementById(id);
+        if (!el) return;
+        el.classList.toggle('disabled', precisaBloquearCurtos);
+    });
+
+    if (precisaBloquearCurtos && VEICULOS_CURTOS.includes(veiculoSelecionado)) {
+        selecionarVeiculo('Moto', null);
+    }
 }
 
 function selecionarVeiculo(tipo, preco) {
@@ -1014,10 +1511,15 @@ function selecionarVeiculo(tipo, preco) {
     veiculoSelecionado = tipo;
     if (preco) veiculoPrecoSelecionado = preco;
     atualizarPrecoEstimadoAtual();
+    const servico = getServicoSelecionadoAtual();
+    const distanciaKm = Number.isFinite(resumoRevisaoAtual.distanciaKm) ? resumoRevisaoAtual.distanciaKm : 0;
+    veiculoPrecoSelecionado = precoParaMoeda(calcularFreteEstimado({ servico, veiculo: tipo, distanciaKm }));
 }
 
-function irParaVeiculos() {
+async function irParaVeiculos() {
     setModalEnvioStep(2);
+    await garantirEstimativaAtual();
+    atualizarPrecoEstimadoAtual();
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
@@ -1028,20 +1530,28 @@ function voltarParaDetalhes() {
 // Revisao com distancia/tempo e valor estimado
 async function irParaRevisao() {
     const nome = document.getElementById('card-nome').innerText;
-    const enderecoDestino = document.getElementById('card-endereco').innerText;
-    const enderecoOrigem = await obterEnderecoLojaAtual();
+    const enderecoDestinoExibicao = document.getElementById('card-endereco').innerText;
     const servico = document.querySelector('#modal-envio-detalhes .selection-grid .select-box.active strong')?.innerText || 'Standard';
     const tamanho = document.querySelector('#modal-envio-detalhes .selection-grid-3 .select-box.active strong')?.innerText || 'P';
-    let distanciaKm = null;
-    let duracaoMin = null;
-    if (enderecoOrigem && enderecoDestino) {
-        const estimativa = await estimarRotaEntrega(enderecoOrigem, enderecoDestino);
-        if (estimativa) { distanciaKm = estimativa.distanciaKm; duracaoMin = estimativa.duracaoMin; }
-    }
+    const estimativa = await garantirEstimativaAtual();
+    const enderecoOrigem = resumoRevisaoAtual.origem || '';
+    const enderecoDestino = (resumoRevisaoAtual.destino || enderecoDestinoExibicao || '').trim();
+    const distanciaKm = Number.isFinite(resumoRevisaoAtual.distanciaKm) ? resumoRevisaoAtual.distanciaKm : null;
+    const duracaoMin = Number.isFinite(resumoRevisaoAtual.duracaoMin) ? resumoRevisaoAtual.duracaoMin : null;
     const totalFrete = calcularFreteEstimado({ servico, veiculo: veiculoSelecionado, distanciaKm: Number.isFinite(distanciaKm) ? distanciaKm : 0 });
-    resumoRevisaoAtual = { origem: enderecoOrigem, destino: enderecoDestino, distanciaKm, duracaoMin, totalFrete, servico, veiculo: veiculoSelecionado };
+    resumoRevisaoAtual = {
+        origem: enderecoOrigem,
+        destino: enderecoDestino,
+        origemGeo: resumoRevisaoAtual.origemGeo || null,
+        destinoGeo: resumoRevisaoAtual.destinoGeo || null,
+        distanciaKm,
+        duracaoMin,
+        totalFrete,
+        servico,
+        veiculo: veiculoSelecionado
+    };
     document.getElementById('rev-nome').innerText = nome;
-    document.getElementById('rev-end').innerText = enderecoDestino;
+    document.getElementById('rev-end').innerText = enderecoDestinoExibicao;
     document.getElementById('rev-servico').innerText = servico;
     document.getElementById('rev-tamanho').innerText = `Pacote ${tamanho} - ${veiculoSelecionado}`;
     document.getElementById('rev-total').innerText = precoParaMoeda(totalFrete);
@@ -1049,6 +1559,10 @@ async function irParaRevisao() {
     const revTempo = document.getElementById('rev-tempo'); if (revTempo) revTempo.innerText = formatarDuracao(duracaoMin);
     const revOrigem = document.getElementById('rev-origem'); if (revOrigem) revOrigem.innerText = enderecoOrigem || 'Defina o endereco da loja no Perfil';
     const inputValor = document.getElementById('input-valor'); if (inputValor) inputValor.value = totalFrete.toFixed(2);
+    if (!estimativa) {
+        const detalheTxt = detalheRotaParaTexto(ultimoErroRota?.detalhe);
+        alert(`Endereco invalido ou incompleto para rota.\n\nRetorno da API:\n${detalheTxt || (ultimoErroRota?.msg || 'Sem detalhe de erro.')}`);
+    }
     setModalEnvioStep(3);
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
@@ -1488,6 +2002,9 @@ function abrirModalEndereco() {
         document.getElementById('end-cidade').value = end.cidade || '';
         document.getElementById('end-uf').value = end.uf || '';
         document.getElementById('end-comp').value = end.comp || '';
+        const cep = formatarCep(end.cep || '');
+        const faltandoCamposBase = !end.rua || !end.bairro || !end.cidade || !end.uf;
+        if (cep && faltandoCamposBase) buscarCEP(cep, { silencioso: true });
     }
 }
 
@@ -1502,36 +2019,52 @@ function fecharModalEndereco() {
 }
 
 // 3. BUSCA CEP (VERSÃO ?sNICA E COMPLETA)
-function buscarCEP(valor) {
+async function buscarCEP(valor, opts = {}) {
+    const silencioso = Boolean(opts?.silencioso);
     const cep = valor.replace(/\D/g, '');
-    if (cep.length !== 8) return;
+    if (cep.length !== 8) return null;
+    if (cep === ultimoCepLojaConsultado && document.getElementById('end-rua')?.value) return null;
+    ultimoCepLojaConsultado = cep;
 
     // Feedback visual nos campos
     const campoRua = document.getElementById('end-rua');
     campoRua.placeholder = "Buscando endereço...";
 
-    fetch(`https://viacep.com.br/ws/${cep}/json/`)
-        .then(res => res.json())
-        .then(dados => {
-            if (!dados.erro) {
-                document.getElementById('end-rua').value = dados.logradouro;
-                document.getElementById('end-bairro').value = dados.bairro;
-                document.getElementById('end-cidade').value = dados.localidade;
-                document.getElementById('end-uf').value = dados.uf;
-                document.getElementById('end-num').focus(); // Foca no número para agilizar
-            } else {
-                alert("CEP não encontrado.");
-                campoRua.placeholder = "Nome da rua";
-            }
-        })
-        .catch(() => {
-            alert("Erro ao buscar CEP. Verifique sua conexão.");
-            campoRua.placeholder = "Nome da rua";
-        });
+    try {
+        const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const dados = await res.json();
+        if (!dados.erro) {
+            document.getElementById('end-rua').value = dados.logradouro || '';
+            document.getElementById('end-bairro').value = dados.bairro || '';
+            document.getElementById('end-cidade').value = dados.localidade || '';
+            document.getElementById('end-uf').value = dados.uf || '';
+            document.getElementById('end-num').focus();
+            return dados;
+        }
+        if (!silencioso) alert("CEP não encontrado.");
+    } catch (_) {
+        if (!silencioso) alert("Erro ao buscar CEP. Verifique sua conexão.");
+    } finally {
+        campoRua.placeholder = "Nome da rua";
+    }
+    return null;
 }
 
+function agendarBuscaCepLoja(valor) {
+    const cep = (valor || '').replace(/\D/g, '');
+    if (cepLojaDebounceTimer) clearTimeout(cepLojaDebounceTimer);
+    if (cep.length !== 8) return;
+    cepLojaDebounceTimer = setTimeout(() => {
+        buscarCEP(cep, { silencioso: true });
+    }, 260);
+}
+
+document.getElementById('end-cep')?.addEventListener('input', function (e) {
+    agendarBuscaCepLoja(e.target.value);
+});
+
 // 4. SALVA NO FIREBASE
-function salvarEndereco() {
+async function salvarEndereco() {
     // Identifica o UID de forma segura
     const uid = window.usuarioLogado?.id || (firebase.auth().currentUser ? firebase.auth().currentUser.uid : null);
     
@@ -1541,14 +2074,25 @@ function salvarEndereco() {
     }
 
     const endereco = {
-        cep: document.getElementById('end-cep').value,
-        rua: document.getElementById('end-rua').value,
-        num: document.getElementById('end-num').value,
-        bairro: document.getElementById('end-bairro').value,
-        cidade: document.getElementById('end-cidade').value,
-        uf: document.getElementById('end-uf').value,
-        comp: document.getElementById('end-comp').value
+        cep: formatarCep(document.getElementById('end-cep').value),
+        rua: (document.getElementById('end-rua').value || '').trim(),
+        num: (document.getElementById('end-num').value || '').trim(),
+        bairro: (document.getElementById('end-bairro').value || '').trim(),
+        cidade: (document.getElementById('end-cidade').value || '').trim(),
+        uf: normalizarUf(document.getElementById('end-uf').value),
+        comp: (document.getElementById('end-comp').value || '').trim()
     };
+    endereco.estado = endereco.uf;
+
+    try {
+        const geo = await geocodificarPorCampos(endereco);
+        if (geo) {
+            endereco.geo = normalizarGeo(geo);
+            endereco.geoSig = assinaturaEndereco(endereco);
+        }
+    } catch (_) {
+        // segue sem travar salvamento do endereco
+    }
 
     // Salva no nó 'endereco' dentro do perfil do usuário
     db.ref('usuarios/' + uid + '/endereco').update(endereco)
@@ -1585,6 +2129,7 @@ function abrirSeletorCliente() {
 function fecharSeletorCliente() {
     const modal = document.getElementById('modal-seletor-cliente');
     if (!modal) return;
+    fecharSwipesClientesSelector();
     modal.classList.remove('is-open');
     setTimeout(() => {
         modal.style.display = 'none';
@@ -1594,6 +2139,172 @@ function fecharSeletorCliente() {
 function abrirNovoClientePeloSeletor() {
     fecharSeletorCliente();
     setTimeout(() => abrirNovoCliente(), 180);
+}
+
+let selectorTouchStartX = 0;
+let selectorActiveCard = null;
+let selectorActiveRow = null;
+let clienteAcaoAtualId = null;
+let clientePendenteExclusao = null;
+
+function fecharSwipesClientesSelector(exceptId = null) {
+    document.querySelectorAll('.selector-swipe-row').forEach((row) => {
+        if (exceptId && row.id === exceptId) return;
+        const card = row.querySelector('.selector-cliente-card');
+        if (card) card.style.transform = 'translateX(0)';
+        row.classList.remove('is-open');
+    });
+}
+
+function handleSelectorTouchStart(e) {
+    selectorTouchStartX = e.touches[0].clientX;
+    selectorActiveCard = e.currentTarget;
+    selectorActiveRow = selectorActiveCard.closest('.selector-swipe-row');
+    selectorActiveCard.style.transition = 'none';
+    selectorActiveCard.dataset.cancelClick = '0';
+    if (selectorActiveRow) fecharSwipesClientesSelector(selectorActiveRow.id);
+}
+
+function handleSelectorTouchMove(e) {
+    if (!selectorActiveCard) return;
+    const touchX = e.touches[0].clientX;
+    const diff = touchX - selectorTouchStartX;
+    if (Math.abs(diff) > 8) selectorActiveCard.dataset.cancelClick = '1';
+    if (diff < 0) {
+        const limitado = Math.max(diff, -148);
+        selectorActiveCard.style.transform = `translateX(${limitado}px)`;
+    }
+}
+
+function handleSelectorTouchEnd(e) {
+    if (!selectorActiveCard || !selectorActiveRow) return;
+    selectorActiveCard.style.transition = 'transform 0.22s ease';
+    const touchX = e.changedTouches[0].clientX;
+    const diff = touchX - selectorTouchStartX;
+    if (diff < -58) {
+        selectorActiveCard.style.transform = 'translateX(-148px)';
+        selectorActiveRow.classList.add('is-open');
+    } else {
+        selectorActiveCard.style.transform = 'translateX(0)';
+        selectorActiveRow.classList.remove('is-open');
+    }
+    selectorActiveCard = null;
+    selectorActiveRow = null;
+}
+
+function handleSelectorCardClick(event, id, nome, endereco, whats) {
+    const card = event.currentTarget;
+    const row = card.closest('.selector-swipe-row');
+    if (card.dataset.cancelClick === '1') {
+        card.dataset.cancelClick = '0';
+        return;
+    }
+    if (row?.classList.contains('is-open')) {
+        fecharSwipesClientesSelector();
+        return;
+    }
+    selecionarClienteNoSheet(id, nome, endereco, whats);
+}
+
+function abrirModalAcoesCliente(id) {
+    const cliente = clientes.find((c) => c.id === id);
+    if (!cliente) return;
+    clienteAcaoAtualId = id;
+    const modal = document.getElementById('modal-acoes-cliente');
+    const title = document.getElementById('cliente-actions-name');
+    if (!modal || !title) return;
+    title.innerText = cliente.nome || 'Cliente';
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => modal.classList.add('is-open'));
+}
+
+function fecharModalAcoesCliente() {
+    const modal = document.getElementById('modal-acoes-cliente');
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    setTimeout(() => { modal.style.display = 'none'; }, 220);
+}
+
+function abrirHistoricoDoClienteAtual() {
+    if (!clienteAcaoAtualId) return;
+    const id = clienteAcaoAtualId;
+    clienteAcaoAtualId = null;
+    fecharModalAcoesCliente();
+    setTimeout(() => verHistoricoCliente(id), 150);
+}
+
+function excluirClienteAtualComConfirmacao() {
+    if (!clienteAcaoAtualId) return;
+    const id = clienteAcaoAtualId;
+    clienteAcaoAtualId = null;
+    fecharModalAcoesCliente();
+    excluirClienteComDesfazer(id);
+}
+
+function atualizarListasClientesUI() {
+    renderClientes(document.getElementById('buscar-cliente')?.value || '');
+    renderClientesSelector(document.getElementById('buscar-cliente')?.value || '');
+    renderEnviosHome();
+}
+
+function excluirClienteComDesfazer(clienteId) {
+    const idx = clientes.findIndex((c) => c.id === clienteId);
+    if (idx < 0) return;
+
+    clientePendenteExclusao = { cliente: clientes[idx], idx };
+    clientes.splice(idx, 1);
+    saveClientes();
+    atualizarListasClientesUI();
+    fecharSwipesClientesSelector();
+
+    const toastAnterior = document.getElementById('toast-desfazer');
+    if (toastAnterior) {
+        clearInterval(toastAnterior.dataset.intervalId);
+        toastAnterior.remove();
+    }
+
+    const toast = document.createElement('div');
+    toast.className = 'undo-toast';
+    toast.id = 'toast-desfazer';
+
+    let segundosRestantes = 10;
+    toast.innerHTML = `
+        <div class="undo-content">
+            <div class="undo-timer" id="timer-count">${segundosRestantes}</div>
+            <span style="font-size: 14px;">Contato excluído</span>
+        </div>
+        <div class="undo-btn">Desfazer</div>
+    `;
+    toast.onclick = () => desfazerExclusaoCliente();
+    document.body.appendChild(toast);
+
+    const interval = setInterval(() => {
+        segundosRestantes--;
+        const timerElement = document.getElementById('timer-count');
+        if (timerElement) timerElement.innerText = segundosRestantes;
+        if (segundosRestantes <= 0) {
+            clearInterval(interval);
+            clientePendenteExclusao = null;
+            fecharToastSuave(toast);
+        }
+    }, 1000);
+
+    toast.dataset.intervalId = interval;
+}
+
+function desfazerExclusaoCliente() {
+    const toast = document.getElementById('toast-desfazer');
+    if (toast) {
+        clearInterval(toast.dataset.intervalId);
+        toast.remove();
+    }
+    if (!clientePendenteExclusao) return;
+    const { cliente, idx } = clientePendenteExclusao;
+    const pos = Math.max(0, Math.min(idx, clientes.length));
+    clientes.splice(pos, 0, cliente);
+    saveClientes();
+    atualizarListasClientesUI();
+    clientePendenteExclusao = null;
 }
 
 function renderClientesSelector(filtro = '') {
@@ -1630,19 +2341,34 @@ function renderClientesSelector(filtro = '') {
             ? `<img class="selector-avatar-img" src="${foto}" alt="${c.nome || 'Cliente'}">`
             : `<span class="selector-avatar-iniciais">${iniciais}</span>`;
 
+        const nomeEsc = (c.nome || '').replace(/'/g, "\\'");
+        const endEsc = (c.endereco || '').replace(/'/g, "\\'");
+        const whatsEsc = (c.whatsapp || '').replace(/'/g, "\\'");
         return `
-            <button type="button" class="selector-cliente-card" onclick="selecionarClienteNoSheet('${c.id}', '${c.nome.replace(/'/g, "\\'")}', '${c.endereco.replace(/'/g, "\\'")}', '${c.whatsapp.replace(/'/g, "\\'")}')">
-                ${badge}
-                <div class="selector-avatar">${avatar}</div>
-                <div class="selector-info">
-                    <strong class="selector-nome">${c.nome}</strong>
-                    <span class="selector-endereco">${formatEnderecoDisplay(c.endereco)}</span>
-                    <span class="selector-whatsapp">
-                        <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 448 512" fill="currentColor"><path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.1 0-65.6-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-5.5-2.8-23.2-8.5-44.2-27.1-16.4-14.6-27.4-32.7-30.6-38.2-3.2-5.6-.3-8.6 2.5-11.3 2.5-2.5 5.6-6.5 8.3-9.7 2.8-3.3 3.7-5.6 5.6-9.3 1.9-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 13.2 5.8 23.5 9.2 31.5 11.8 13.3 4.2 25.4 3.6 35 2.2 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"/></svg>
-                        ${c.whatsapp}
-                    </span>
+            <div class="selector-swipe-row" id="selector-row-${c.id}">
+                <div class="selector-swipe-actions">
+                    <button type="button" class="selector-action-more" onclick="event.stopPropagation(); abrirModalAcoesCliente('${c.id}')">Mais</button>
+                    <button type="button" class="selector-action-edit" onclick="event.stopPropagation(); abrirEditarCliente('${c.id}')">Editar</button>
                 </div>
-            </button>
+                <button type="button"
+                        class="selector-cliente-card"
+                        data-client-id="${c.id}"
+                        ontouchstart="handleSelectorTouchStart(event)"
+                        ontouchmove="handleSelectorTouchMove(event)"
+                        ontouchend="handleSelectorTouchEnd(event)"
+                        onclick="handleSelectorCardClick(event, '${c.id}', '${nomeEsc}', '${endEsc}', '${whatsEsc}')">
+                    ${badge}
+                    <div class="selector-avatar">${avatar}</div>
+                    <div class="selector-info">
+                        <strong class="selector-nome">${c.nome}</strong>
+                        <span class="selector-endereco">${formatEnderecoDisplay(c.endereco)}</span>
+                        <span class="selector-whatsapp">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 448 512" fill="currentColor"><path d="M380.9 97.1C339 55.1 283.2 32 223.9 32c-122.4 0-222 99.6-222 222 0 39.1 10.2 77.3 29.6 111L0 480l117.7-30.9c32.4 17.7 68.9 27 106.1 27h.1c122.3 0 224.1-99.6 224.1-222 0-59.3-25.2-115-67.1-157zm-157 341.6c-33.1 0-65.6-8.9-94-25.7l-6.7-4-69.8 18.3L72 359.2l-4.4-7c-18.5-29.4-28.2-63.3-28.2-98.2 0-101.7 82.8-184.5 184.6-184.5 49.3 0 95.6 19.2 130.4 54.1 34.8 34.9 56.2 81.2 56.1 130.5 0 101.8-84.9 184.6-186.6 184.6zm101.2-138.2c-5.5-2.8-32.8-16.2-37.9-18-5.1-1.9-8.8-2.8-12.5 2.8-3.7 5.6-14.3 18-17.6 21.8-3.2 3.7-6.5 4.2-12 1.4-5.5-2.8-23.2-8.5-44.2-27.1-16.4-14.6-27.4-32.7-30.6-38.2-3.2-5.6-.3-8.6 2.5-11.3 2.5-2.5 5.6-6.5 8.3-9.7 2.8-3.3 3.7-5.6 5.6-9.3 1.9-3.7.9-6.9-.5-9.7-1.4-2.8-12.5-30.1-17.1-41.2-4.5-10.8-9.1-9.3-12.5-9.5-3.2-.2-6.9-.2-10.6-.2-3.7 0-9.7 1.4-14.8 6.9-5.1 5.6-19.4 19-19.4 46.3 0 27.3 19.9 53.7 22.6 57.4 2.8 3.7 39.1 59.7 94.8 83.8 13.2 5.8 23.5 9.2 31.5 11.8 13.3 4.2 25.4 3.6 35 2.2 10.7-1.6 32.8-13.4 37.4-26.4 4.6-13 4.6-24.1 3.2-26.4-1.3-2.5-5-3.9-10.5-6.6z"/></svg>
+                            ${c.whatsapp}
+                        </span>
+                    </div>
+                </button>
+            </div>
         `;
     }).join('');
 }

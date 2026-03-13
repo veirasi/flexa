@@ -9,6 +9,7 @@ const db = admin.database();
 const ROUTING_REGION = process.env.ROUTING_REGION || 'southamerica-east1';
 const REQUIRE_AUTH = String(process.env.REQUIRE_AUTH || 'true').toLowerCase() === 'true';
 const CORS_ORIGIN = process.env.CORS_ORIGIN || '*';
+const GOOGLE_SERVER_KEY = process.env.GOOGLE_MAPS_SERVER_KEY || 'AIzaSyCOgFqFbI1U8DPYt_UWyc5_lwft-5PlULQ';
 
 function setCors(res) {
   res.set('Access-Control-Allow-Origin', CORS_ORIGIN);
@@ -21,7 +22,18 @@ function formatAddress(endereco) {
   const ruaNum = [endereco.rua, endereco.num].filter(Boolean).join(', ');
   const bairro = endereco.bairro ? ` - ${endereco.bairro}` : '';
   const cidadeUf = [endereco.cidade, endereco.uf].filter(Boolean).join('/');
-  return `${ruaNum}${bairro}${cidadeUf ? ` - ${cidadeUf}` : ''}`.trim();
+  const base = `${ruaNum}${bairro}${cidadeUf ? ` - ${cidadeUf}` : ''}`.trim();
+  const cep = String(endereco.cep || '').trim();
+  if (base && cep) return `${base} - CEP ${cep}`;
+  return base;
+}
+
+function normalizeGeo(geo) {
+  if (!geo) return null;
+  const lat = Number(geo.lat);
+  const lon = Number(geo.lon);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  return { lat, lon };
 }
 
 function parseBearerToken(req) {
@@ -38,44 +50,28 @@ async function resolveRequester(req) {
   return decoded;
 }
 
-async function geocodeNominatim(address) {
-  const q = encodeURIComponent(`${address}, Brasil`);
-  const url = `https://nominatim.openstreetmap.org/search?format=jsonv2&limit=1&countrycodes=br&q=${q}`;
-
-  const response = await fetch(url, {
-    headers: {
-      'User-Agent': 'WebFlexaRouting/1.0 (contato@flexa.app)'
-    }
-  });
-
-  if (!response.ok) {
-    throw new Error(`Nominatim HTTP ${response.status}`);
-  }
-
+async function geocodeGoogle(address) {
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&components=country:BR&key=${GOOGLE_SERVER_KEY}`;
+  const response = await fetch(url);
+  if (!response.ok) throw new Error(`Google Geocoding HTTP ${response.status}`);
   const json = await response.json();
-  if (!Array.isArray(json) || !json.length) return null;
-
-  return {
-    lat: Number(json[0].lat),
-    lon: Number(json[0].lon)
-  };
+  const loc = json?.results?.[0]?.geometry?.location;
+  if (json?.status !== 'OK' || !loc) return null;
+  return { lat: Number(loc.lat), lon: Number(loc.lng) };
 }
 
-async function routeOsrm(origin, destination) {
-  const url = `https://router.project-osrm.org/route/v1/driving/${origin.lon},${origin.lat};${destination.lon},${destination.lat}?overview=false`;
+async function routeGoogleDistanceMatrix(origin, destination) {
+  const origins = `${origin.lat},${origin.lon}`;
+  const destinations = `${destination.lat},${destination.lon}`;
+  const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${encodeURIComponent(origins)}&destinations=${encodeURIComponent(destinations)}&mode=driving&region=br&language=pt-BR&key=${GOOGLE_SERVER_KEY}`;
   const response = await fetch(url);
-
-  if (!response.ok) {
-    throw new Error(`OSRM HTTP ${response.status}`);
-  }
-
+  if (!response.ok) throw new Error(`Google Distance Matrix HTTP ${response.status}`);
   const json = await response.json();
-  const route = json?.routes?.[0];
-  if (!route) return null;
-
+  const el = json?.rows?.[0]?.elements?.[0];
+  if (json?.status !== 'OK' || el?.status !== 'OK') return null;
   return {
-    distanciaKm: Number((route.distance / 1000).toFixed(2)),
-    duracaoMin: Math.max(1, Math.round(route.duration / 60))
+    distanciaKm: Number((Number(el.distance.value) / 1000).toFixed(2)),
+    duracaoMin: Math.max(1, Math.round(Number(el.duration.value) / 60))
   };
 }
 
@@ -103,7 +99,7 @@ exports.routing = onRequest({ region: ROUTING_REGION, timeoutSeconds: 20 }, asyn
   }
 
   const path = (req.path || '/').replace(/\/+$/, '') || '/';
-  if (path !== '/estimate-route') {
+  if (path !== '/' && path !== '/estimate-route') {
     return res.status(404).json({ error: 'Not found' });
   }
 
@@ -113,7 +109,7 @@ exports.routing = onRequest({ region: ROUTING_REGION, timeoutSeconds: 20 }, asyn
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    const { tenantId, tenantType, origemEndereco, destinoEndereco } = req.body || {};
+    const { tenantId, tenantType, origemEndereco, destinoEndereco, origemGeo, destinoGeo } = req.body || {};
 
     if (!tenantId || !tenantType || !destinoEndereco) {
       return res.status(400).json({ error: 'Missing required fields', required: ['tenantId', 'tenantType', 'destinoEndereco'] });
@@ -131,23 +127,26 @@ exports.routing = onRequest({ region: ROUTING_REGION, timeoutSeconds: 20 }, asyn
     }
 
     const enderecoLojistaSnap = await db.ref(`usuarios/${tenantId}/endereco`).once('value');
-    const enderecoLojistaObj = enderecoLojistaSnap.val();
+    const enderecoLojistaObj = enderecoLojistaSnap.val() || {};
     const origemResolvida = formatAddress(enderecoLojistaObj) || origemEndereco || '';
 
     if (!origemResolvida) {
       return res.status(400).json({ error: 'Origem não definida para o lojista' });
     }
 
+    const geoOrigemPreferida = normalizeGeo(origemGeo) || normalizeGeo(enderecoLojistaObj.geo);
+    const geoDestinoPreferida = normalizeGeo(destinoGeo);
+
     const [originGeo, destinationGeo] = await Promise.all([
-      geocodeNominatim(origemResolvida),
-      geocodeNominatim(destinoEndereco)
+      geoOrigemPreferida ? Promise.resolve(geoOrigemPreferida) : geocodeGoogle(origemResolvida),
+      geoDestinoPreferida ? Promise.resolve(geoDestinoPreferida) : geocodeGoogle(destinoEndereco)
     ]);
 
     if (!originGeo || !destinationGeo) {
       return res.status(422).json({ error: 'Não foi possível geocodificar origem/destino' });
     }
 
-    const route = await routeOsrm(originGeo, destinationGeo);
+    const route = await routeGoogleDistanceMatrix(originGeo, destinationGeo);
     if (!route) {
       return res.status(422).json({ error: 'Não foi possível calcular rota' });
     }

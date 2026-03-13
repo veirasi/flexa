@@ -166,7 +166,7 @@
             border-color: var(--brand-orange); 
         }
         /* NOVOS ESTILOS - TELA DE ENVIO (CONFORME PRINTS) */
-        .destinatario-card { background: white; padding: 20px; border-radius: 24px; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); }
+.destinatario-card { background: white; padding: 20px; border-radius: 24px; margin-top: 10px; margin-bottom: 25px; box-shadow: 0 4px 15px rgba(0,0,0,0.03); }
         .destinatario-label { font-size: 11px; font-weight: 800; color: #94a3b8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; display: block; }
         .destinatario-nome { font-size: 18px; font-weight: 800; color: #0f172a; display: block; }
         .destinatario-info { font-size: 14px; color: #64748b; margin-top: 2px; display: block; }
@@ -1352,6 +1352,42 @@
     padding: 2px 0 12px;
 }
 
+.selector-swipe-row {
+    position: relative;
+    overflow: hidden;
+    border-radius: 16px;
+    margin-bottom: 10px;
+}
+
+.selector-swipe-actions {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    z-index: 0;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.18s ease;
+}
+
+.selector-swipe-actions button {
+    width: 74px;
+    height: 100%;
+    border: none;
+    color: #fff;
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.selector-action-more {
+    background: #4b5563;
+}
+
+.selector-action-edit {
+    background: #2e7d32;
+}
+
 .selector-empty {
     text-align: center;
     color: #94a3b8;
@@ -1371,6 +1407,14 @@
     display: flex;
     align-items: center;
     gap: 10px;
+    z-index: 1;
+    transition: transform 0.22s ease;
+    margin-bottom: 0;
+}
+
+.selector-swipe-row.is-open .selector-swipe-actions {
+    opacity: 1;
+    pointer-events: auto;
 }
 
 .selector-freq-badge {
@@ -1445,6 +1489,53 @@
 
 .selector-sheet-footer {
     margin-top: 10px;
+}
+
+.cliente-actions-sheet {
+    max-width: 360px;
+    padding-bottom: 10px;
+}
+
+.cliente-actions-head-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.cliente-actions-header {
+    font-size: 24px;
+    font-weight: 800;
+    color: #111827;
+    margin: 6px 0 10px;
+}
+
+.cliente-actions-close {
+    width: 34px;
+    height: 34px;
+    border: none;
+    border-radius: 50%;
+    background: #f1f5f9;
+    color: #64748b;
+    font-size: 24px;
+    line-height: 1;
+}
+
+.cliente-actions-item {
+    width: calc(100% + 50px);
+    margin-left: -25px;
+    margin-right: -25px;
+    border: none;
+    border-top: 1px solid #e5e7eb;
+    background: #fff;
+    height: 56px;
+    font-size: 20px;
+    font-weight: 700;
+    color: #4b5563;
+}
+
+.cliente-actions-item.danger {
+    color: #ef4444;
 }
 
 
