@@ -371,26 +371,29 @@
 </div>
 
 <nav id="main-nav" style="display: none;">
-    <a href="#" class="nav-item active" onclick="navegar('view-dash-loja')">
+    <div id="nav-active-indicator" aria-hidden="true"></div>
+
+    <a href="#" class="nav-item active" data-nav-target="view-dash-loja" onclick="navegar('view-dash-loja')">
         <i data-lucide="home"></i>
         <span>Início</span>
     </a>
 
-    <a href="#" class="nav-item" onclick="navegar('view-rotas')">
+    <a href="#" class="nav-item" data-nav-target="view-rotas" onclick="navegar('view-rotas')">
         <i data-lucide="map"></i>
         <span>Rotas</span>
     </a>
 
-    <div class="nav-center-plus" onclick="navegar('view-novo-envio')">
-        <i data-lucide="plus" size="32"></i>
+    <div class="nav-center-plus" data-nav-target="view-novo-envio" onclick="navegar('view-novo-envio')">
+        <i data-lucide="plus" size="22"></i>
+        <span>Envio</span>
     </div>
 
-    <a href="#" class="nav-item" onclick="alert('Chat em breve')">
+    <a href="#" class="nav-item" data-nav-target="view-chat" onclick="ativarAbaChat(); return false;">
         <i data-lucide="message-circle"></i>
         <span>Chat</span>
     </a>
 
-    <a href="#" class="nav-item" onclick="irParaPerfil()">
+    <a href="#" class="nav-item" data-nav-target="view-perfil" onclick="irParaPerfil()">
         <i data-lucide="user"></i>
         <span>Perfil</span>
     </a>
@@ -857,6 +860,7 @@
     <script src="app.js"></script>
 </body>
 </html>
+
 
 
 

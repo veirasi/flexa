@@ -806,14 +806,19 @@ async function salvarNovoCliente() {
 function atualizarIndicadorMenuInferior() {
     const nav = document.getElementById('main-nav');
     const indicador = document.getElementById('nav-active-indicator');
-    const ativo = nav ? nav.querySelector('.nav-item.active') : null;
-    if (!nav || !indicador || !ativo || nav.style.display === 'none') return;
+    const ativo = nav
+        ? (nav.querySelector('.nav-item.active') || nav.querySelector('.nav-center-plus.is-active'))
+        : null;
+
+    if (!nav || !indicador || nav.style.display === 'none' || !ativo) return;
 
     const navRect = nav.getBoundingClientRect();
     const ativoRect = ativo.getBoundingClientRect();
-    const largura = indicador.offsetWidth || 52;
+    const isCentro = ativo.classList.contains('nav-center-plus');
+    const largura = isCentro ? 30 : 24;
     const targetX = (ativoRect.left - navRect.left) + (ativoRect.width / 2) - (largura / 2);
 
+    indicador.style.width = `${largura}px`;
     indicador.style.transform = `translate3d(${targetX}px, 0, 0)`;
     nav.classList.add('nav-ready');
 }
@@ -904,26 +909,14 @@ function navegar(idTela) {
     const telasComMenu = ['view-dash-loja', 'view-novo-envio', 'view-rotas', 'view-perfil'];
 
     if (nav) {
-        nav.style.display = telasComMenu.includes(idTela) ? 'flex' : 'none';
-    }
-    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+        const mostrarMenu = telasComMenu.includes(idTela);
+        nav.style.display = mostrarMenu ? 'flex' : 'none';
 
-    const menuMap = {
-        'view-dash-loja': 1,
-        'view-rotas': 2,
-        'view-chat': 4,
-        'view-perfil': 5
-    };
-
-    if (menuMap[idTela]) {
-        const activeItem = document.querySelector(`.nav-item:nth-child(${menuMap[idTela]})`);
-        if (activeItem) {
-            activeItem.classList.add('active');
-            animarAtivacaoItemMenu(activeItem);
+        if (mostrarMenu) {
+            ativarMenuInferior(idTela);
         }
     }
 
-    atualizarEstadoBotaoCentralMenu(idTela);
 
     window.scrollTo(0, 0);
     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -3757,6 +3750,8 @@ abrirNovoCliente = function abrirNovoClienteComSheet() {
 renderClientes = function renderClientesRedirect(filtro = '') {
     renderClientesSelector(filtro);
 };
+
+
 
 
 

@@ -94,112 +94,99 @@
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(180deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0) 45%);
+    background: linear-gradient(180deg, rgba(255,255,255,0.04) 0%, rgba(255,255,255,0) 45%);
     pointer-events: none;
     z-index: 0;
 }
 
-/* Ícones não ativos (Brancos Vazados) */
-.nav-item {
-    position: relative;
+#nav-active-indicator {
+    position: absolute;
+    bottom: 8px;
+    left: 0;
+    width: 28px;
+    height: 4px;
+    border-radius: 999px;
+    background: #ffffff;
+    opacity: 0.95;
+    transform: translate3d(12px, 0, 0);
+    transition: transform 0.32s cubic-bezier(0.22, 1, 0.36, 1), width 0.28s ease;
     z-index: 1;
+    pointer-events: none;
+}
+
+.nav-item,
+.nav-center-plus {
+    position: relative;
+    z-index: 2;
     color: #FFFFFF;
     text-decoration: none;
     display: flex;
     flex-direction: column;
     align-items: center;
+    justify-content: center;
     gap: 4px;
     width: 64px;
+    min-height: 56px;
     opacity: 0.72;
     transform: translateY(0);
     transition: opacity 0.22s ease, transform 0.22s ease;
 }
 
-.nav-item i {
+.nav-item svg,
+.nav-center-plus svg {
     color: #FFFFFF;
-    stroke: currentColor;
+    stroke: #FFFFFF;
     fill: transparent;
     stroke-width: 1.8px;
     transition: transform 0.22s ease, stroke-width 0.22s ease, fill 0.22s ease;
 }
 
-/* Ícone ativo (Branco preenchido) */
-.nav-item.active {
-    color: #FFFFFF;
+.nav-item.active,
+.nav-center-plus.is-active {
     opacity: 1;
     transform: translateY(-1px);
 }
 
-.nav-item.active i {
+.nav-item.active svg,
+.nav-center-plus.is-active svg {
     fill: #FFFFFF;
     stroke: #FFFFFF;
-    stroke-width: 2.25px;
+    stroke-width: 2.2px;
 }
 
-.nav-item.active i * {
+.nav-item.active svg *,
+.nav-center-plus.is-active svg * {
     fill: #FFFFFF !important;
     stroke: #FFFFFF !important;
 }
 
-.nav-item.nav-just-activated i {
+.nav-item.nav-just-activated svg,
+.nav-center-plus.nav-just-activated svg {
     animation: navIconPop 0.28s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
-.nav-item.nav-just-activated span {
-    animation: navLabelFade 0.24s ease;
-}
-
-.nav-item span {
+.nav-item span,
+.nav-center-plus span {
     font-size: 10px;
     font-weight: 600;
+    color: #FFFFFF;
+}
+
+.nav-center-plus {
+    background: transparent;
+    border: none;
+    box-shadow: none;
+}
+
+.nav-center-plus:active,
+.nav-item:active {
+    transform: translateY(0);
 }
 
 @keyframes navIconPop {
     0% { transform: translateY(0) scale(1); }
     45% { transform: translateY(-2px) scale(1.12); }
     100% { transform: translateY(0) scale(1); }
-}
-
-@keyframes navLabelFade {
-    0% { opacity: 0.7; transform: translateY(1px); }
-    100% { opacity: 1; transform: translateY(0); }
-}
-
-/* Botão + Envio em Destaque */
-.nav-center-plus {
-    position: relative;
-    z-index: 1;
-    background: #FFFFFF;
-    width: 50px;
-    height: 50px;
-    border-radius: 50%;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    border: 3px solid var(--brand-orange);
-    transform: translateY(-1px);
-    box-shadow: 0 5px 15px rgba(0,0,0,0.2);
-    transition: transform 0.25s ease, box-shadow 0.25s ease;
-}
-
-.nav-center-plus.is-active {
-    transform: translateY(-4px) scale(1.03);
-    box-shadow: 0 8px 20px rgba(245, 130, 32, 0.35);
-}
-
-.nav-center-plus.nav-just-activated {
-    animation: navCenterPop 0.28s cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-@keyframes navCenterPop {
-    0% { transform: translateY(-1px) scale(1); }
-    45% { transform: translateY(-6px) scale(1.08); }
-    100% { transform: translateY(-4px) scale(1.03); }
-}
-
-.nav-center-plus i {
-    color: #111111 !important;
-    stroke-width: 2.4px;
 }
 .hidden { display: none !important; }
         /* ADICIONE ISTO AQUI */
@@ -2744,4 +2731,5 @@
     color: #1d4ed8;
     background: #e8f1ff;
 }
+
 
