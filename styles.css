@@ -1,4 +1,4 @@
-﻿        /* ESTILOS ORIGINAIS MANTIDOS */
+        /* ESTILOS ORIGINAIS MANTIDOS */
         :root {
             --brand-orange: #f58220;
             --brand-orange-hover: #e67616;
@@ -88,7 +88,7 @@
     z-index: 9999;
 }
 
-/* �cones n�o ativos (Brancos Vazados) */
+/* Ícones não ativos (Brancos Vazados) */
 .nav-item {
     color: #FFFFFF;
     text-decoration: none;
@@ -101,10 +101,10 @@
 }
 
 .nav-item i {
-    stroke-width: 1.5px; /* Deixa o �cone mais fino/vazado */
+    stroke-width: 1.5px; /* Deixa o ícone mais fino/vazado */
 }
 
-/* �cone ativo (Branco Preenchido) */
+/* Ícone ativo (Branco Preenchido) */
 .nav-item.active {
     color: #FFFFFF;
     opacity: 1;
@@ -119,7 +119,7 @@
     font-weight: 600;
 }
 
-/* Bot�o + Envio em Destaque */
+/* Botão + Envio em Destaque */
 .nav-center-plus {
     background: #FFFFFF; /* Fundo Branco */
     width: 50px;
@@ -136,9 +136,7 @@
 .nav-center-plus i {
     color: #000000 !important; /* + em Preto */
 }
-
-
-        .hidden { display: none !important; }
+.hidden { display: none !important; }
         /* ADICIONE ISTO AQUI */
         .filter-container { 
             display: flex; 
@@ -1203,10 +1201,10 @@
 
 .envio-item-card {
     background: #ffffff;
-    border-radius: 22px;
+    border-radius: 18px;
     border: 1px solid #e9eef5;
-    padding: 14px 14px 12px;
-    box-shadow: 0 6px 16px rgba(15, 23, 42, 0.04);
+    padding: 10px 12px;
+    box-shadow: 0 4px 12px rgba(15, 23, 42, 0.04);
 }
 
 .envio-item-top {
@@ -1214,42 +1212,59 @@
     justify-content: space-between;
     align-items: center;
     gap: 10px;
-    margin-bottom: 8px;
+    margin-bottom: 6px;
+}
+
+.envio-item-top-compact {
+    align-items: flex-start;
+}
+
+.envio-item-main {
+    min-width: 0;
+    flex: 1;
+}
+
+.envio-item-side {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 5px;
 }
 
 .envio-item-code {
-    font-size: 30px;
+    font-size: 14px;
     line-height: 0.9;
     color: #4b5563;
     font-weight: 800;
 }
 
 .envio-item-kicker {
-    font-size: 12px;
+    font-size: 10px;
     color: #64748b;
     font-weight: 700;
+    letter-spacing: 0.2px;
 }
 
 .envio-item-name {
-    font-size: 18px;
-    letter-spacing: -0.4px;
+    font-size: 16px;
+    letter-spacing: -0.2px;
     color: #1e293b;
     font-weight: 800;
-    line-height: 1.05;
+    line-height: 1.1;
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
 }
 
 .envio-item-meta {
-    font-size: 13px;
+    font-size: 12px;
     color: #7b8794;
-    margin-top: 4px;
+    margin-top: 2px;
 }
 
 .envio-item-route {
-    margin-top: 6px;
-    font-size: 12px;
+    margin-top: 4px;
+    font-size: 11px;
     color: #94a3b8;
     font-weight: 700;
 }
@@ -1257,26 +1272,43 @@
 .envio-item-status {
     display: inline-flex;
     align-items: center;
-    padding: 3px 10px;
+    padding: 2px 8px;
     border-radius: 999px;
     background: #fff7ed;
     color: var(--brand-orange);
-    font-size: 11px;
+    font-size: 10px;
     font-weight: 800;
+    line-height: 1.2;
 }
 
 .envio-item-price {
-    font-size: 42px;
-    line-height: 0.88;
+    font-size: 24px;
+    line-height: 1;
     font-weight: 800;
     color: var(--brand-orange);
     text-align: right;
     white-space: nowrap;
-    letter-spacing: -1px;
+    letter-spacing: -0.3px;
+}
+
+.envio-item-line {
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    margin-top: 6px;
+    padding-top: 6px;
+    border-top: 1px dashed #edf2f7;
+}
+
+.envio-item-service {
+    font-size: 11px;
+    color: #64748b;
+    font-weight: 700;
+    text-transform: none;
 }
 
 .envio-item-date {
-    font-size: 12px;
+    font-size: 11px;
     color: #94a3b8;
     text-align: right;
     margin-top: 2px;
@@ -1630,4 +1662,961 @@
     font-size: 15px;
     font-weight: 700;
     padding: 12px 14px;
+}
+
+/* Envio Details Modal */
+.envio-item-card {
+    cursor: pointer;
+}
+
+.envio-detalhe-sheet {
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+    padding: 0 22px 0;
+    overflow: hidden;
+}
+
+.envio-detalhe-header {
+    position: sticky;
+    top: 0;
+    z-index: 6;
+    background: #fff;
+    padding: 12px 0 10px;
+}
+
+.envio-detalhe-title {
+    text-align: left;
+    font-size: 24px;
+    line-height: 1.05;
+}
+
+.envio-detalhe-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 4px 2px 18px;
+}
+
+.envio-detalhe-card {
+    background: #fff;
+    border: 1px solid #e9eef5;
+    border-radius: 16px;
+    padding: 12px;
+    margin-bottom: 10px;
+}
+
+.envio-detalhe-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.envio-detalhe-pedido {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 700;
+}
+
+.envio-detalhe-cliente {
+    display: block;
+    font-size: 18px;
+    color: #0f172a;
+    line-height: 1.15;
+    margin-bottom: 3px;
+}
+
+.envio-detalhe-whatsapp {
+    display: inline-flex;
+    font-size: 13px;
+    color: #475569;
+    font-weight: 600;
+}
+
+.envio-detalhe-info-list {
+    background: #fff;
+    border: 1px solid #e9eef5;
+    border-radius: 12px;
+    margin-bottom: 10px;
+    overflow: hidden;
+}
+
+.envio-detalhe-info-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 10px 12px;
+    border-bottom: 1px solid #eef3f8;
+}
+
+.envio-detalhe-info-row:last-child {
+    border-bottom: none;
+}
+
+.envio-detalhe-info-row span {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 700;
+}
+
+.envio-detalhe-info-row strong {
+    font-size: 14px;
+    color: #0f172a;
+    font-weight: 800;
+    text-align: right;
+}
+.envio-detalhe-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+    margin-bottom: 10px;
+}
+
+.envio-detalhe-cell {
+    background: #f8fafc;
+    border: 1px solid #e8eef5;
+    border-radius: 12px;
+    padding: 8px 10px;
+    min-height: 56px;
+}
+
+.envio-detalhe-cell span {
+    display: block;
+    font-size: 11px;
+    color: #94a3b8;
+    font-weight: 700;
+    margin-bottom: 3px;
+}
+
+.envio-detalhe-cell strong {
+    display: block;
+    font-size: 14px;
+    color: #0f172a;
+    line-height: 1.2;
+    font-weight: 700;
+}
+
+.envio-detalhe-section {
+    background: #fff;
+    border: 1px solid #e9eef5;
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+}
+
+.envio-detalhe-section h4 {
+    margin: 0 0 4px;
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 800;
+    text-transform: uppercase;
+}
+
+.envio-detalhe-section p {
+    margin: 0;
+    font-size: 13px;
+    color: #1e293b;
+    line-height: 1.35;
+}
+
+.envio-detalhe-map-wrap {
+    border-radius: 14px;
+    overflow: hidden;
+    border: 1px solid #e9eef5;
+    margin-top: 6px;
+    background: #f8fafc;
+}
+
+.envio-detalhe-map-wrap iframe {
+    width: 100%;
+    height: 190px;
+    border: none;
+    display: block;
+}
+
+.envio-detalhe-link-mapa {
+    margin-top: 8px;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 700;
+    text-decoration: none;
+}
+
+.envio-detalhe-footer {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    display: flex;
+    gap: 10px;
+    padding: 12px 0 18px;
+    z-index: 7;
+}
+
+.envio-detalhe-footer .btn-cancelar,
+.envio-detalhe-footer .btn-salvar {
+    flex: 1;
+}
+
+.envio-detalhe-btn-excluir {
+    background: #ef4444;
+}
+
+@media (max-width: 400px) {
+    .envio-detalhe-title {
+        font-size: 22px;
+    }
+
+    .envio-detalhe-info-row strong {
+        font-size: 13px;
+    }
+}
+
+/* Rota Flow Modal */
+.rota-flow-sheet {
+    display: flex;
+    flex-direction: column;
+    max-height: 90vh;
+    padding: 0 20px 0;
+    overflow: hidden;
+}
+
+.rota-flow-header {
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    background: #fff;
+    padding: 12px 0 10px;
+}
+
+.rota-flow-handle {
+    width: 52px;
+    height: 4px;
+    background: #d1d5db;
+    border-radius: 999px;
+    margin: 0 auto 12px;
+}
+
+.rota-flow-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.rota-flow-header-row h2 {
+    margin: 0;
+    font-size: 20px;
+    color: #0f172a;
+    font-weight: 800;
+    flex: 1;
+    text-align: center;
+}
+
+.rota-flow-icon-btn {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 50%;
+    background: #f1f5f9;
+    color: #64748b;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    cursor: pointer;
+}
+
+.rota-flow-step-label {
+    margin-top: 10px;
+    text-align: center;
+    font-size: 12px;
+    color: #94a3b8;
+    font-weight: 700;
+}
+
+.rota-flow-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 8px 2px 12px;
+}
+
+.rota-flow-help {
+    font-size: 13px;
+    color: #64748b;
+    line-height: 1.4;
+    margin: 0 0 12px;
+}
+
+.rota-flow-counter {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    font-size: 12px;
+    color: #475569;
+    font-weight: 700;
+}
+
+.rota-pending-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.rota-pending-item {
+    width: 100%;
+    border: 1px solid #e9eef5;
+    border-radius: 14px;
+    background: #fff;
+    padding: 10px 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    text-align: left;
+    cursor: pointer;
+}
+
+.rota-pending-item.selected {
+    border-color: var(--brand-orange);
+    background: #fffaf5;
+}
+
+.rota-pending-main {
+    min-width: 0;
+}
+
+.rota-pending-main strong {
+    display: block;
+    color: #0f172a;
+    font-size: 15px;
+    line-height: 1.2;
+    margin-bottom: 2px;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rota-pending-main span {
+    display: block;
+    color: #64748b;
+    font-size: 12px;
+}
+
+.rota-pending-meta {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-end;
+    gap: 4px;
+    color: #0f172a;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.rota-badge-flash {
+    background: #fff0eb;
+    color: var(--brand-orange);
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.rota-badge-standard {
+    background: #f1f5f9;
+    color: #475569;
+    border-radius: 999px;
+    padding: 2px 8px;
+    font-size: 10px;
+    font-weight: 800;
+}
+
+.rota-flow-empty {
+    padding: 18px 14px;
+    border: 1px dashed #cbd5e1;
+    border-radius: 14px;
+    text-align: center;
+    color: #64748b;
+    font-size: 13px;
+    background: #f8fafc;
+}
+
+.rota-pix-card {
+    border: 1px solid #e9eef5;
+    border-radius: 18px;
+    background: #fff;
+    padding: 14px;
+    text-align: left;
+}
+
+.rota-pix-label {
+    display: block;
+    font-size: 12px;
+    color: #94a3b8;
+    font-weight: 800;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+}
+
+.rota-pix-code-text {
+    display: block;
+    width: 100%;
+    margin: 0;
+    padding: 10px;
+    border-radius: 10px;
+    background: #f8fafc;
+    border: 1px dashed #cbd5e1;
+    color: #0f172a;
+    font-size: 12px;
+    line-height: 1.4;
+    word-break: break-all;
+    text-align: left;
+}
+
+.rota-pix-copy-btn {
+    width: 100%;
+    margin-top: 10px;
+    border: none;
+    border-radius: 12px;
+    background: var(--brand-orange);
+    color: #fff;
+    font-size: 14px;
+    font-weight: 700;
+    padding: 10px 12px;
+}
+
+.rota-pix-copy-feedback {
+    display: block;
+    min-height: 18px;
+    margin-top: 6px;
+    color: #0f766e;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.rota-pix-status {
+    margin-top: 8px;
+    font-size: 12px;
+    font-weight: 700;
+}
+
+.rota-pix-status-pending {
+    color: #334155;
+}
+
+.rota-pix-status-approved {
+    color: #15803d;
+}
+
+.rota-pix-status-warning {
+    color: #b45309;
+}
+
+.rota-pix-status-loading {
+    color: #0369a1;
+}
+
+.rota-pix-ticket-link {
+    margin-top: 8px;
+    display: inline-flex;
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--brand-orange);
+    text-decoration: none;
+}
+
+.rota-pix-meta {
+    margin-top: 10px;
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    font-size: 12px;
+    color: #334155;
+    font-weight: 700;
+}
+
+.rota-flow-success-icon {
+    width: 90px;
+    height: 90px;
+    margin: 10px auto 16px;
+    border-radius: 999px;
+    background: #10b981;
+    color: #fff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 42px;
+    font-weight: 700;
+}
+
+.rota-flow-success-title {
+    margin: 0;
+    text-align: center;
+    color: #0f172a;
+    font-size: 24px;
+    font-weight: 800;
+}
+
+.rota-created-id-box {
+    margin-top: 14px;
+    border: 1px solid #e9eef5;
+    border-radius: 14px;
+    padding: 12px;
+    text-align: center;
+    background: #fff;
+}
+
+.rota-created-id-box span {
+    display: block;
+    font-size: 12px;
+    color: #94a3b8;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.rota-created-id-box strong {
+    font-size: 22px;
+    color: #0f172a;
+    letter-spacing: 0.6px;
+}
+
+.rota-flow-footer {
+    position: sticky;
+    bottom: 0;
+    background: #fff;
+    padding: 10px 0 16px;
+    z-index: 5;
+}
+
+.rota-flow-footer .btn-main {
+    margin-top: 0;
+}
+
+/* Rotas - Lista Principal */
+.rota-main-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 4px 12px;
+    font-size: 15px;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+.rota-main-link-ver-todas {
+    text-decoration: none;
+    color: var(--brand-orange);
+    font-size: 13px;
+    font-weight: 700;
+}
+
+.rotas-main-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 0;
+}
+
+.rota-main-card {
+    background: #fff;
+    border-radius: 18px;
+    padding: 12px;
+    display: grid;
+    grid-template-columns: 50px minmax(0, 1fr);
+    align-items: center;
+    gap: 10px;
+    box-shadow: 0 4px 14px rgba(15, 23, 42, 0.05);
+    border: 1px solid rgba(15, 23, 42, 0.04);
+    text-align: left;
+}
+
+.rota-main-icon {
+    width: 50px;
+    height: 50px;
+    border-radius: 14px;
+    background: #f1f5f9;
+    color: #111827;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.rota-main-info {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+}
+
+.rota-main-id {
+    display: block;
+    font-size: 14px;
+    line-height: 1.05;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0;
+}
+
+.rota-main-sub {
+    display: none;
+}
+
+.rota-main-meta {
+    display: block;
+    font-size: 12px;
+    font-weight: 600;
+    color: #8a94a5;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    margin-top: 2px;
+}
+
+.rota-main-status {
+    border-radius: 999px;
+    padding: 5px 10px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.3px;
+    text-transform: uppercase;
+    white-space: nowrap;
+}
+
+.rota-main-status.status-buscando {
+    background: #fff1e8;
+    color: var(--brand-orange);
+}
+
+.rota-main-status.status-em-rota {
+    background: #ebf8ff;
+    color: #0284c7;
+}
+
+.rota-main-status.status-finalizada {
+    background: #ecfdf3;
+    color: #16a34a;
+}
+
+.rota-main-status.status-pendente {
+    background: #f1f5f9;
+    color: #64748b;
+}
+
+.rota-main-empty {
+    text-align: center;
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 700;
+    padding: 18px 10px;
+    border: 1px dashed #cbd5e1;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.6);
+}
+
+/* Rotas - Swipe Actions */
+.rota-swipe-wrap {
+    position: relative;
+    overflow: hidden;
+    border-radius: 18px;
+}
+
+.rota-swipe-actions {
+    position: absolute;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    display: flex;
+    z-index: 1;
+}
+
+.rota-swipe-btn {
+    width: 78px;
+    border: none;
+    color: #fff;
+    font-size: 12px;
+    font-weight: 800;
+}
+
+.rota-swipe-btn.btn-more {
+    background: #475569;
+}
+
+.rota-swipe-btn.btn-delete {
+    background: #dc2626;
+}
+
+.rota-swipe-card {
+    position: relative;
+    z-index: 2;
+    transition: transform 0.25s ease;
+}
+
+/* Modal Detalhe da Rota */
+.rota-detalhe-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 13000;
+    background: rgba(15, 23, 42, 0.35);
+    backdrop-filter: blur(6px);
+    align-items: flex-end;
+}
+
+.rota-detalhe-sheet {
+    width: 100%;
+    max-height: 92vh;
+    display: flex;
+    flex-direction: column;
+    background: #fff;
+    border-radius: 34px 34px 0 0;
+    overflow: hidden;
+    transform: translateY(100%);
+    transition: transform 0.28s ease;
+}
+
+.rota-detalhe-sheet.show {
+    transform: translateY(0);
+}
+
+.rota-detalhe-header {
+    position: sticky;
+    top: 0;
+    z-index: 5;
+    background: #fff;
+    padding: 16px 18px 12px;
+}
+
+.rota-detalhe-header .modal-handle {
+    width: 46px;
+    height: 5px;
+    border-radius: 999px;
+    background: #cfd8e3;
+    margin: 2px auto 14px;
+}
+
+.rota-detalhe-header-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+}
+
+.rota-detalhe-header-row h2 {
+    font-size: 22px;
+    font-weight: 800;
+    color: #0f172a;
+    margin: 0;
+}
+
+.rota-detalhe-id-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    margin-bottom: 10px;
+}
+
+.rota-detalhe-id-row strong {
+    font-size: 18px;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.rota-detalhe-summary-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 10px 12px;
+    background: #f8fafc;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 10px 12px;
+}
+
+.rota-detalhe-summary-grid div {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    padding: 0;
+}
+
+.rota-detalhe-summary-grid span {
+    display: block;
+    font-size: 11px;
+    font-weight: 700;
+    color: #94a3b8;
+    margin-bottom: 2px;
+}
+
+.rota-detalhe-summary-grid strong {
+    display: block;
+    font-size: 14px;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.rota-detalhe-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 10px 18px 10px;
+    background: #fff;
+}
+
+.rota-detalhe-package-card {
+    background: #fff;
+    border-radius: 14px;
+    border: 1px solid #e2e8f0;
+    padding: 12px;
+}
+
+.rota-detalhe-package-card h4 {
+    margin: 0 0 10px;
+    font-size: 16px;
+    font-weight: 800;
+    color: #0f172a;
+}
+
+.rota-detalhe-line {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 6px 0;
+    border-bottom: 1px solid #edf2f7;
+}
+
+.rota-detalhe-line:last-of-type {
+    border-bottom: none;
+}
+
+.rota-detalhe-line span {
+    font-size: 12px;
+    color: #64748b;
+    font-weight: 700;
+}
+
+.rota-detalhe-line strong {
+    font-size: 13px;
+    color: #0f172a;
+    font-weight: 800;
+    text-align: right;
+}
+
+.rota-detalhe-block {
+    margin-top: 10px;
+}
+
+.rota-detalhe-block span {
+    display: block;
+    font-size: 11px;
+    color: #94a3b8;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 3px;
+}
+
+.rota-detalhe-block p {
+    margin: 0;
+    font-size: 13px;
+    color: #334155;
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.rota-detalhe-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 5;
+    background: #fff;
+    padding: 8px 18px 12px;
+}
+
+.rota-detalhe-dots {
+    display: flex;
+    justify-content: center;
+    gap: 8px;
+    margin-bottom: 2px;
+}
+
+.rota-detalhe-dot {
+    width: 9px;
+    height: 9px;
+    border-radius: 999px;
+    border: none;
+    background: #cbd5e1;
+}
+
+.rota-detalhe-dot.active {
+    background: var(--brand-orange);
+}
+
+.rota-detalhe-nav {
+    display: none;
+    grid-template-columns: 1fr auto 1fr;
+    align-items: center;
+    gap: 10px;
+}
+
+.rota-detalhe-nav button {
+    border: none;
+    border-radius: 10px;
+    padding: 10px 12px;
+    font-size: 13px;
+    font-weight: 800;
+    background: #f1f5f9;
+    color: #0f172a;
+}
+
+.rota-detalhe-nav button:disabled {
+    opacity: 0.45;
+}
+
+.rota-detalhe-nav span {
+    font-size: 12px;
+    font-weight: 800;
+    color: #64748b;
+}
+
+.rota-main-top-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 3px;
+}
+
+.rota-main-badges {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    flex-shrink: 0;
+}
+
+.rota-main-city {
+    display: block;
+    font-size: 13px;
+    color: #7b8798;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.rota-main-city strong {
+    color: #0f172a;
+    font-weight: 800;
+}
+
+.rota-main-cities-tag {
+    border-radius: 999px;
+    padding: 5px 10px;
+    font-size: 10px;
+    font-weight: 800;
+    letter-spacing: 0.2px;
+    white-space: nowrap;
+    color: #1d4ed8;
+    background: #e8f1ff;
 }

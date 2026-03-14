@@ -24,6 +24,15 @@ let ultimoCepLojaConsultado = '';
 let ultimoErroRota = null;
 let googleMapsLoaderPromise = null;
 const FORCAR_REGEOCODIFICACAO = true;
+let envioDetalheAtualId = null;
+
+let mostrarTodasRotasHome = false;
+let rotasHomeCache = [];
+let rotaDetalheAtual = null;
+let rotaDetalhePacotes = [];
+let rotaDetalhePaginaAtual = 0;
+let rotaDetalheSwipeStartX = 0;
+let rotaDetalheSwipeEndX = 0;
 
 function getUsuarioIdAtual() {
     return usuarioLogado?.id || (firebase.auth().currentUser ? firebase.auth().currentUser.uid : null);
@@ -330,130 +339,17 @@ async function initClientes() {
     renderClientes(document.getElementById('buscar-cliente')?.value || '');
 }
 
-        lucide.createIcons();
-
-        // ===================== [NAVEGA - fO & UI GLOBAL] =====================
-function navegar(idTela) {
-		if (idTela === 'view-perfil' && window.usuarioLogado) {
-        const dados = window.usuarioLogado;
-        if (document.getElementById('perfil-nome-display')) {
-            document.getElementById('perfil-nome-display').innerText = dados.nome || 'Usuário';
-            document.getElementById('perfil-insta-display').innerText = dados.instagram || '@seuinsta';
-            document.getElementById('perfil-foto-display').src = dados.foto || 'https://via.placeholder.com/110';
-        }
-    }
-    // --------------------------------
-    
-    
-    // 1. Troca de telas
-    document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
-    const target = document.getElementById(idTela);
-    if(target) target.classList.add('active');
-    
-    // 2. Limpeza do formulário de envio (Regra do Flexa)
-    if (idTela !== 'view-novo-envio') {
-        const passos = ['envio-p1', 'envio-p2', 'envio-p3', 'envio-p4', 'envio-p5', 'envio-v-veiculo'];
-        passos.forEach(id => {
-            const el = document.getElementById(id);
-            if(el) el.classList.add('hidden');
-        });
-        const p1 = document.getElementById('envio-p1');
-        if(p1) p1.classList.remove('hidden');
-        // Fecha sheets de envio se estiverem abertos
-        fecharModalEnvioDetalhes();
-        fecharModalNovoCliente();
-    }
-    if (idTela === 'view-novo-envio') {
-        initClienteSearch();
-        initClientes();
-    }
-
-    // 3. Controle do Menu Inferior
-    // MUDANÇA: Use o ID exato que está no seu HTML (ex: main-nav)
-    const nav = document.getElementById('main-nav'); 
-    const telasComMenu = ['view-dash-loja', 'view-novo-envio', 'view-rotas', 'view-perfil'];
-    
-    if(nav) {
-        nav.style.display = telasComMenu.includes(idTela) ? 'flex' : 'none';
-    }
-
-    // 4. Marcar Ícone Ativo
-    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
-    
-    // Mapeamento simples
-    const menuMap = {
-        'view-dash-loja': 1,
-        'view-rotas': 2,
-        'view-chat': 4,
-        'view-perfil': 5
-    };
-
-    if(menuMap[idTela]) {
-        const activeItem = document.querySelector(`.nav-item:nth-child(${menuMap[idTela]})`);
-        if(activeItem) activeItem.classList.add('active');
-    }
-    
-    window.scrollTo(0,0);
-    if(typeof lucide !== 'undefined') lucide.createIcons();
-}
-
-// Função de Preview da Foto (Ponto 1)
-function previewImage(event) {
-    const reader = new FileReader();
-    reader.onload = function() {
-        document.getElementById('preview-foto').src = reader.result;
-    }
-    reader.readAsDataURL(event.target.files[0]);
-}
-
-async function buscarEndereco() {
-    const cepField = document.getElementById('new-cli-cep');
-    const cep = cepField.value.replace(/\D/g, '');
-
-    if (cep.length === 8) {
-        try {
-            const response = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
-            const data = await response.json();
-
-            if (!data.erro) {
-                document.getElementById('new-cli-rua').value = data.logradouro || '';
-                document.getElementById('new-cli-bairro').value = data.bairro || '';
-                document.getElementById('new-cli-cidade').value = data.localidade || '';
-                document.getElementById('new-cli-estado').value = data.uf || '';
-                // Foca no número automaticamente para agilizar
-                document.getElementById('new-cli-num').focus();
-            } else {
-                alert("CEP não encontrado.");
-            }
-        } catch (error) {
-            console.error("Erro na busca:", error);
-        }
-    }
-}
-
-
-
-
-        function irParaCadastro(tipo) {
-            navegar('view-auth');
-            const groupCNH = document.getElementById('group-cnh');
-            const inputNome = document.getElementById('input-nome');
-            document.getElementById('label-nome').innerText = tipo === 'loja' ? "Nome da loja" : "Nome completo";
-            inputNome.placeholder = tipo === 'loja' ? "Digite o nome da loja" : "Seu nome completo";
-            tipo === 'loja' ? groupCNH.classList.add('hidden') : groupCNH.classList.remove('hidden');
-            alternarAuth('entrar');
-}
-
 function initClienteSearch() {
     const input = document.getElementById('buscar-cliente');
     if (!input || input.dataset.bound === 'true') return;
     input.dataset.bound = 'true';
     input.addEventListener('input', (e) => {
-        renderClientes(e.target.value || '');
+        const termo = e.target.value || '';
+        renderClientes(termo);
+        if (typeof renderClientesSelector === 'function') renderClientesSelector(termo);
     });
 }
 
-// --- MODAIS (SHEETS) DO ENVIO ---
 function abrirModalEnvioDetalhes() {
     const modal = document.getElementById('modal-envio-detalhes');
     if (!modal) return;
@@ -491,11 +387,13 @@ function fecharModalNovoCliente() {
 }
 
 function abrirEditarCliente(id) {
-    const cliente = clientes.find(c => c.id === id);
+    const cliente = clientes.find((c) => c.id === id);
     if (!cliente) return;
+
     clienteEmEdicaoId = id;
     document.getElementById('new-cli-nome').value = cliente.nome || '';
     document.getElementById('new-cli-tel').value = cliente.whatsapp || '';
+
     const campos = extrairCamposEnderecoCliente(cliente);
     document.getElementById('new-cli-cep').value = campos.cep || '';
     document.getElementById('new-cli-rua').value = campos.rua || '';
@@ -504,6 +402,7 @@ function abrirEditarCliente(id) {
     document.getElementById('new-cli-cidade').value = campos.cidade || '';
     document.getElementById('new-cli-estado').value = campos.estado || '';
     document.getElementById('new-cli-comp').value = campos.comp || '';
+    document.getElementById('new-cli-obs').value = cliente.obs || '';
 
     document.getElementById('novo-cliente-title').innerText = 'Editar Cliente';
     document.getElementById('btn-salvar-cliente').innerText = 'Salvar Alterações';
@@ -511,35 +410,44 @@ function abrirEditarCliente(id) {
 }
 
 function resetClienteForm() {
-    document.querySelectorAll('#modal-novo-cliente input').forEach(input => input.value = '');
+    document.querySelectorAll('#modal-novo-cliente input').forEach((input) => {
+        input.value = '';
+    });
     clienteEmEdicaoId = null;
     document.getElementById('novo-cliente-title').innerText = 'Novo Cliente';
     document.getElementById('btn-salvar-cliente').innerText = 'Salvar e Continuar';
 }
 
 function verHistoricoCliente(id) {
-    const cliente = clientes.find(c => c.id === id);
+    const cliente = clientes.find((c) => c.id === id);
     if (!cliente) return;
+
     const historico = Array.isArray(cliente.historico) ? cliente.historico : [];
-    document.getElementById('historico-title').innerText = `Histórico  -  ${cliente.nome}`;
+    const title = document.getElementById('historico-title');
     const list = document.getElementById('historico-list');
+    if (!list) return;
+
+    if (title) title.innerText = `Histórico - ${cliente.nome || 'Cliente'}`;
+
     if (!historico.length) {
-        list.innerHTML = `<div style="text-align:center; color: var(--text-sub); font-size: 13px; padding: 20px 0;">Este cliente ainda não possui envios.</div>`;
+        list.innerHTML = '<div style="text-align:center; color: var(--text-sub); font-size: 13px; padding: 20px 0;">Este cliente ainda não possui envios.</div>';
     } else {
         list.innerHTML = historico.map((h) => {
             const data = new Date(h.criadoEm || Date.now()).toLocaleDateString('pt-BR');
+            const valor = Number.isFinite(Number(h.valorFrete)) ? precoParaMoeda(Number(h.valorFrete)) : precoParaMoeda(parseMoedaParaNumero(h.valor || 0));
             return `
                 <div class="historico-item">
-                    <h4>${h.descricao ? h.descricao : 'Envio'}</h4>
-                    <p>${data}  -  ${h.servico || '-'}  -  ${h.tamanho || '-'}</p>
+                    <h4>${h.descricao || 'Envio'}</h4>
+                    <p>${data} - ${h.servico || '-'} - ${h.tamanho || '-'}</p>
                     <div class="historico-meta">
                         <span>${h.veiculo || '-'}</span>
-                        <span>R$ ${h.valor || '-'}</span>
+                        <span>${valor}</span>
                     </div>
                 </div>
             `;
         }).join('');
     }
+
     abrirModalHistorico();
 }
 
@@ -548,7 +456,6 @@ function abrirModalHistorico() {
     if (!modal) return;
     modal.style.display = 'flex';
     requestAnimationFrame(() => modal.classList.add('is-open'));
-    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
 function fecharModalHistorico() {
@@ -568,20 +475,18 @@ function setModalEnvioStep(step) {
         document.getElementById('modal-envio-step-3'),
         document.getElementById('modal-envio-step-4')
     ];
+
     const footerStep1 = document.getElementById('modal-envio-footer-step-1');
     steps.forEach((el, idx) => {
         if (!el) return;
         if (idx === step - 1) {
             el.classList.remove('hidden');
-            el.classList.add('fade-step');
-            setTimeout(() => el.classList.remove('fade-step'), 400);
         } else {
             el.classList.add('hidden');
         }
     });
-    if (footerStep1) {
-        footerStep1.style.display = step === 1 ? 'block' : 'none';
-    }
+
+    if (footerStep1) footerStep1.style.display = step === 1 ? 'block' : 'none';
 
     const titles = {
         1: 'Detalhes do Envio',
@@ -595,20 +500,8 @@ function setModalEnvioStep(step) {
     const dots = document.querySelectorAll('#envio-progress-dots .dot');
     dots.forEach((dot) => {
         const dotStep = Number(dot.getAttribute('data-step'));
-        if (dotStep === step) {
-            dot.classList.add('active');
-            dot.classList.remove('pulse');
-            void dot.offsetWidth;
-            dot.classList.add('pulse');
-        } else {
-            dot.classList.remove('active');
-            dot.classList.remove('pulse');
-        }
+        dot.classList.toggle('active', dotStep === step);
     });
-
-    if (navigator.vibrate && step > 1) {
-        navigator.vibrate(6);
-    }
 }
 
 function handleEnvioBack() {
@@ -619,102 +512,120 @@ function handleEnvioBack() {
     }
 }
 
-        /* L?"GICA DE PASSOS DO ENVIO */
-        function irParaPasso2(id, nome, endereco, whats) {
+function irParaPasso2(id, nome, endereco, whats) {
     clienteSelecionadoId = id;
     const cliente = getClienteById(id);
-    // Preenche os dados
-    document.getElementById('card-nome').innerText = nome;
-    document.getElementById('card-endereco').innerText = endereco;
-    document.getElementById('card-whatsapp').innerText = whats;
-    resumoRevisaoAtual.destino = montarEnderecoParaCalculo(cliente, endereco);
+
+    const nomeEl = document.getElementById('card-nome');
+    const enderecoEl = document.getElementById('card-endereco');
+    const whatsEl = document.getElementById('card-whatsapp');
+
+    if (nomeEl) nomeEl.innerText = nome || 'Cliente';
+    if (enderecoEl) enderecoEl.innerText = endereco || '--';
+    if (whatsEl) whatsEl.innerText = whats || '--';
+
+    resumoRevisaoAtual.destino = montarEnderecoParaCalculo(cliente, endereco || '');
     resumoRevisaoAtual.destinoGeo = getGeoCliente(cliente);
     resumoRevisaoAtual.origemGeo = normalizarGeo(window.usuarioLogado?.endereco?.geo);
     resumoRevisaoAtual.distanciaKm = null;
     resumoRevisaoAtual.duracaoMin = null;
+    resumoRevisaoAtual.valorConteudo = null;
+    resumoRevisaoAtual.descricao = '';
+    resumoRevisaoAtual.observacoes = '';
 
-    // Para base legada sem coordenadas, tenta geocodificar em segundo plano.
+    const inputDesc = document.getElementById('input-desc');
+    const inputValor = document.getElementById('input-valor');
+    const inputObs = document.getElementById('input-obs-envio');
+    if (inputDesc) inputDesc.value = '';
+    if (inputValor) inputValor.value = '';
+    if (inputObs) inputObs.value = '';
+
     if (cliente && !resumoRevisaoAtual.destinoGeo) {
         garantirGeoClienteSelecionado().catch(() => {});
     }
 
-    // Abre o modal sheet de detalhes (passo 1)
     abrirModalEnvioDetalhes();
 }
 
-function voltarParaPasso(p) {
-    // Esconde absolutamente todos os passos de envio para não encavalar
-    const todosPassos = ['envio-p1', 'envio-p2', 'envio-p3', 'envio-p4', 'envio-p5', 'envio-v-veiculo'];
-    todosPassos.forEach(id => {
-        const el = document.getElementById(id);
-        if(el) el.classList.add('hidden');
-    });
-
-    // Mostra apenas o destino solicitado
-    const destino = document.getElementById('envio-p' + p);
-    if(destino) {
-        destino.classList.remove('hidden');
-        destino.classList.add('fade-step'); 
-        setTimeout(() => destino.classList.remove('fade-step'), 400);
-    }
-    window.scrollTo(0,0);
+function selecionarServico(tipo) {
+    const std = document.getElementById('srv-std');
+    const flash = document.getElementById('srv-flash');
+    if (!std || !flash) return;
+    std.classList.remove('active');
+    flash.classList.remove('active');
+    (tipo === 'Standard' ? std : flash).classList.add('active');
+    atualizarPrecoEstimadoAtual();
 }
 
-        function selecionarServico(tipo) {
-            document.getElementById('srv-std').classList.remove('active');
-            document.getElementById('srv-flash').classList.remove('active');
-            const id = tipo === 'Standard' ? 'srv-std' : 'srv-flash';
-            document.getElementById(id).classList.add('active');
-            atualizarPrecoEstimadoAtual();
-        }
+function selecionarTamanho(tam) {
+    ['p', 'm', 'g'].forEach((k) => {
+        const el = document.getElementById('sz-' + k);
+        if (el) el.classList.remove('active');
+    });
+    const alvo = document.getElementById('sz-' + String(tam || '').toLowerCase());
+    if (alvo) alvo.classList.add('active');
+}
 
-        function selecionarTamanho(tam) {
-            document.getElementById('sz-p').classList.remove('active');
-            document.getElementById('sz-m').classList.remove('active');
-            document.getElementById('sz-g').classList.remove('active');
-            document.getElementById('sz-' + tam.toLowerCase()).classList.add('active');
-        }
+function togglePass(id) {
+    const input = document.getElementById(id);
+    if (!input) return;
+    input.type = input.type === 'password' ? 'text' : 'password';
+}
 
-        /* L?"GICA AUTH ORIGINAL */
-        function togglePass(id) {
-            const input = document.getElementById(id);
-            input.type = input.type === 'password' ? 'text' : 'password';
-        }
-        function alternarAuth(modo) {
-            const fCad = document.getElementById('form-cadastrar'), fEnt = document.getElementById('form-entrar');
-            const tCad = document.getElementById('tab-cadastrar'), tEnt = document.getElementById('tab-entrar');
-            if (modo === 'cadastrar') {
-                fCad.classList.remove('hidden'); fEnt.classList.add('hidden');
-                tCad.classList.add('active'); tEnt.classList.remove('active');
-            } else {
-                fEnt.classList.remove('hidden'); fCad.classList.add('hidden');
-                tEnt.classList.add('active'); tCad.classList.remove('active');
-            }
-        }
+function alternarAuth(modo) {
+    const fCad = document.getElementById('form-cadastrar');
+    const fEnt = document.getElementById('form-entrar');
+    const tCad = document.getElementById('tab-cadastrar');
+    const tEnt = document.getElementById('tab-entrar');
+    if (!fCad || !fEnt || !tCad || !tEnt) return;
+
+    if (modo === 'cadastrar') {
+        fCad.classList.remove('hidden');
+        fEnt.classList.add('hidden');
+        tCad.classList.add('active');
+        tEnt.classList.remove('active');
+    } else {
+        fEnt.classList.remove('hidden');
+        fCad.classList.add('hidden');
+        tEnt.classList.add('active');
+        tCad.classList.remove('active');
+    }
+}
 
 function confirmarEnvioFinal() {
     setModalEnvioStep(4);
     if (typeof lucide !== 'undefined') lucide.createIcons();
 
+    const pedidoId = `envio-${Date.now()}`;
+    const codigoPedido = `#${pedidoId.replace('envio-', '').slice(-4)}`;
+    const codigoEl = document.getElementById('codigo-pedido-solicitado');
+    if (codigoEl) codigoEl.innerText = codigoPedido;
+
     if (clienteSelecionadoId) {
-        const idx = clientes.findIndex(c => c.id === clienteSelecionadoId);
+        const idx = clientes.findIndex((c) => c.id === clienteSelecionadoId);
         if (idx >= 0) {
             const enviosAtual = Number(clientes[idx].envios || 0) + 1;
             clientes[idx].envios = enviosAtual;
             if (enviosAtual >= 5) clientes[idx].frequente = true;
 
             const historico = Array.isArray(clientes[idx].historico) ? clientes[idx].historico : [];
-            const desc = document.getElementById('input-desc')?.value || '';
+            const desc = (resumoRevisaoAtual.descricao || document.getElementById('input-desc')?.value || '').trim();
             const servico = resumoRevisaoAtual.servico || getServicoSelecionadoAtual();
             const tamanho = document.querySelector('#modal-envio-detalhes .selection-grid-3 .select-box.active strong')?.innerText || '';
             const totalFrete = Number.isFinite(resumoRevisaoAtual.totalFrete)
                 ? resumoRevisaoAtual.totalFrete
                 : parseMoedaParaNumero(document.getElementById('input-valor')?.value || 0);
+            const valorConteudo = Number.isFinite(resumoRevisaoAtual.valorConteudo)
+                ? resumoRevisaoAtual.valorConteudo
+                : parseMoedaParaNumero(document.getElementById('input-valor')?.value || 0);
+            const observacoes = (resumoRevisaoAtual.observacoes || document.getElementById('input-obs-envio')?.value || clientes[idx].obs || '').trim();
 
             historico.unshift({
-                id: `envio-${Date.now()}` ,
+                id: pedidoId,
                 criadoEm: Date.now(),
                 descricao: desc,
+                observacoes,
+                valorConteudo: Number(valorConteudo.toFixed(2)),
                 valorFrete: Number(totalFrete.toFixed(2)),
                 servico,
                 tamanho,
@@ -722,10 +633,13 @@ function confirmarEnvioFinal() {
                 distanciaKm: Number.isFinite(resumoRevisaoAtual.distanciaKm) ? Number(resumoRevisaoAtual.distanciaKm.toFixed(2)) : null,
                 duracaoMin: Number.isFinite(resumoRevisaoAtual.duracaoMin) ? Math.round(resumoRevisaoAtual.duracaoMin) : null,
                 origemEndereco: resumoRevisaoAtual.origem || obterEnderecoLojaTexto(),
-                destinoEndereco: resumoRevisaoAtual.destino || document.getElementById('card-endereco')?.innerText || ''
+                destinoEndereco: resumoRevisaoAtual.destino || document.getElementById('card-endereco')?.innerText || '',
+                origemGeo: resumoRevisaoAtual.origemGeo || null,
+                destinoGeo: resumoRevisaoAtual.destinoGeo || null,
+                status: 'PENDENTE'
             });
 
-            clientes[idx].historico = historico.slice(0, 50);
+            clientes[idx].historico = historico.slice(0, 80);
             saveClientes();
             renderClientes(document.getElementById('buscar-cliente')?.value || '');
         }
@@ -737,63 +651,50 @@ function abrirNovoCliente() {
     abrirModalNovoCliente();
 }
 
-// --- MÁSCARAS DE INPUT ---
-document.getElementById('new-cli-tel').addEventListener('input', function (e) {
-    let x = e.target.value.replace(/\D/g, '').match(/(\d{0,2})(\d{0,5})(\d{0,4})/);
-    e.target.value = !x[2] ? x[1] : '(' + x[1] + ') ' + x[2] + (x[3] ? '-' + x[3] : '');
-});
+const telInput = document.getElementById('new-cli-tel');
+if (telInput && !telInput.dataset.maskBound) {
+    telInput.dataset.maskBound = 'true';
+    telInput.addEventListener('input', function (e) {
+        const x = e.target.value.replace(/\D/g, '').match(/(\d{0,2})(\d{0,5})(\d{0,4})/);
+        e.target.value = !x[2] ? x[1] : '(' + x[1] + ') ' + x[2] + (x[3] ? '-' + x[3] : '');
+    });
+}
 
-document.getElementById('new-cli-cep').addEventListener('input', function (e) {
-    let x = e.target.value.replace(/\D/g, '').match(/(\d{0,5})(\d{0,3})/);
-    e.target.value = !x[2] ? x[1] : x[1] + '-' + x[2];
-});
+const cepInputCliente = document.getElementById('new-cli-cep');
+if (cepInputCliente && !cepInputCliente.dataset.maskBound) {
+    cepInputCliente.dataset.maskBound = 'true';
+    cepInputCliente.addEventListener('input', function (e) {
+        const x = e.target.value.replace(/\D/g, '').match(/(\d{0,5})(\d{0,3})/);
+        e.target.value = !x[2] ? x[1] : x[1] + '-' + x[2];
+    });
+}
 
-// --- FUN - fO SALVAR ?sNICA E CORRIGIDA ---
 async function salvarNovoCliente() {
-    const nome = document.getElementById('new-cli-nome').value;
-    const tel = document.getElementById('new-cli-tel').value;
-    const cep = document.getElementById('new-cli-cep').value;
-    const rua = document.getElementById('new-cli-rua').value;
-    const num = document.getElementById('new-cli-num').value;
-    const bairro = document.getElementById('new-cli-bairro').value;
-    const cidade = document.getElementById('new-cli-cidade').value;
-    const estado = document.getElementById('new-cli-estado').value;
-    const comp = document.getElementById('new-cli-comp').value;
+    const nome = document.getElementById('new-cli-nome')?.value || '';
+    const tel = document.getElementById('new-cli-tel')?.value || '';
+    const cep = document.getElementById('new-cli-cep')?.value || '';
+    const rua = document.getElementById('new-cli-rua')?.value || '';
+    const num = document.getElementById('new-cli-num')?.value || '';
+    const bairro = document.getElementById('new-cli-bairro')?.value || '';
+    const cidade = document.getElementById('new-cli-cidade')?.value || '';
+    const estado = document.getElementById('new-cli-estado')?.value || '';
+    const comp = document.getElementById('new-cli-comp')?.value || '';
+    const obs = document.getElementById('new-cli-obs')?.value || '';
 
-    if(nome && tel && rua && num) {
-        const enderecoCompleto = montarEnderecoCliente({ rua, num, bairro, cidade, estado, comp });
-        const ufNormalizada = normalizarUf(estado);
-        const cepLimpo = formatarCep(cep);
+    if (!nome || !tel || !rua || !num) {
+        alert('Por favor, preencha Nome, WhatsApp, Rua e Número.');
+        return;
+    }
 
-        if (clienteEmEdicaoId) {
-            const idx = clientes.findIndex(c => c.id === clienteEmEdicaoId);
-            if (idx >= 0) {
-                clientes[idx] = {
-                    ...clientes[idx],
-                    nome: nome.trim(),
-                    endereco: enderecoCompleto,
-                    whatsapp: tel.trim(),
-                    cep: cepLimpo,
-                    rua: (rua || '').trim(),
-                    num: (num || '').trim(),
-                    bairro: (bairro || '').trim(),
-                    cidade: (cidade || '').trim(),
-                    uf: ufNormalizada,
-                estado: ufNormalizada,
-                    comp: (comp || '').trim()
-                };
-                const geo = await geocodificarCliente(clientes[idx]).catch(() => null);
-                if (geo) {
-                    clientes[idx].geo = normalizarGeo(geo);
-                    clientes[idx].geoSig = assinaturaEndereco(clientes[idx]);
-                }
-            }
-            await saveClientes();
-            renderClientes(document.getElementById('buscar-cliente')?.value || '');
-            clienteSelecionadoId = clienteEmEdicaoId;
-        } else {
-            const novoCliente = {
-                id: `cli-${Date.now()}`,
+    const enderecoCompleto = montarEnderecoCliente({ rua, num, bairro, cidade, estado, comp });
+    const ufNormalizada = normalizarUf(estado);
+    const cepLimpo = formatarCep(cep);
+
+    if (clienteEmEdicaoId) {
+        const idx = clientes.findIndex((c) => c.id === clienteEmEdicaoId);
+        if (idx >= 0) {
+            clientes[idx] = {
+                ...clientes[idx],
                 nome: nome.trim(),
                 endereco: enderecoCompleto,
                 whatsapp: tel.trim(),
@@ -805,66 +706,152 @@ async function salvarNovoCliente() {
                 uf: ufNormalizada,
                 estado: ufNormalizada,
                 comp: (comp || '').trim(),
-                frequente: false,
-                envios: 0
+                obs: (obs || '').trim()
             };
-            const geo = await geocodificarCliente(novoCliente).catch(() => null);
+            const geo = await geocodificarCliente(clientes[idx]).catch(() => null);
             if (geo) {
-                novoCliente.geo = normalizarGeo(geo);
-                novoCliente.geoSig = assinaturaEndereco(novoCliente);
+                clientes[idx].geo = normalizarGeo(geo);
+                clientes[idx].geoSig = assinaturaEndereco(clientes[idx]);
             }
-            clientes.unshift(novoCliente);
-            await saveClientes();
-            renderClientes(document.getElementById('buscar-cliente')?.value || '');
-            clienteSelecionadoId = novoCliente.id;
         }
-        
-        // Abre o modal de detalhes com os dados
-        irParaPasso2(clienteSelecionadoId, nome, enderecoCompleto, tel);
-        
-        // Fecha o modal de novo cliente
-        fecharModalNovoCliente();
-        
-        // Limpa os campos
-        resetClienteForm();
+        await saveClientes();
+        clienteSelecionadoId = clienteEmEdicaoId;
     } else {
-        alert("Por favor, preencha Nome, WhatsApp, Rua e Número.");
+        const novoCliente = {
+            id: `cli-${Date.now()}`,
+            nome: nome.trim(),
+            endereco: enderecoCompleto,
+            whatsapp: tel.trim(),
+            cep: cepLimpo,
+            rua: (rua || '').trim(),
+            num: (num || '').trim(),
+            bairro: (bairro || '').trim(),
+            cidade: (cidade || '').trim(),
+            uf: ufNormalizada,
+            estado: ufNormalizada,
+            comp: (comp || '').trim(),
+            obs: (obs || '').trim(),
+            frequente: false,
+            envios: 0
+        };
+        const geo = await geocodificarCliente(novoCliente).catch(() => null);
+        if (geo) {
+            novoCliente.geo = normalizarGeo(geo);
+            novoCliente.geoSig = assinaturaEndereco(novoCliente);
+        }
+        clientes.unshift(novoCliente);
+        await saveClientes();
+        clienteSelecionadoId = novoCliente.id;
     }
+
+    renderClientes(document.getElementById('buscar-cliente')?.value || '');
+    if (typeof renderClientesSelector === 'function') {
+        renderClientesSelector(document.getElementById('buscar-cliente')?.value || '');
+    }
+
+    irParaPasso2(clienteSelecionadoId, nome, enderecoCompleto, tel);
+    fecharModalNovoCliente();
+    resetClienteForm();
 }
 
+function atualizarIndicadorMenuInferior() {
+    const nav = document.getElementById('main-nav');
+    const indicador = document.getElementById('nav-active-indicator');
+    const ativo = nav ? nav.querySelector('.nav-item.active') : null;
+    if (!nav || !indicador || !ativo || nav.style.display === 'none') return;
 
-        function simularLogin() {
-            navegar('view-dash-loja');
-                        setTimeout(() => {
-                document.getElementById('dash-loader-content').innerHTML = `
-                    <h2 style="font-size: 24px; font-weight: 800; margin-bottom: 25px;">Olá, Express Imports! </h2>
-                    <div class="promo-banner"><h3>Está com pressa?</h3><p>Experimente o envio <b>Flash</b>.</p></div>
-                    
-                    <div class="grid-stats">
-                        <div class="stat-card"><span>Entregas hoje</span><h4>12</h4></div>
-                        <div class="stat-card"><span>Em trânsito</span><h4>4</h4></div>
-                    </div>
+    const navRect = nav.getBoundingClientRect();
+    const ativoRect = ativo.getBoundingClientRect();
+    const largura = indicador.offsetWidth || 52;
+    const targetX = (ativoRect.left - navRect.left) + (ativoRect.width / 2) - (largura / 2);
 
-                    <div class="filter-container">
-                        <div class="chip active">Todas</div>
-                        <div class="chip">Em rota</div>
-                        <div class="chip">Pendentes</div>
-                    </div>
+    indicador.style.transform = `translate3d(${targetX}px, 0, 0)`;
+    nav.classList.add('nav-ready');
+}
 
-                    <div class="rota-card">
-                        <div class="rota-icon"><i data-lucide="package" size="22"></i></div>
-                        <div class="rota-info">
-                            <h5>Rota #8829</h5>
-                            <p>4 pacotes  -  Fortaleza</p>
-                        </div>
-                        <span class="status-pill pill-em-rota">Em rota</span>
-                    </div>
-                `;
-                lucide.createIcons();
-            }, 1200);
+function ativarMenuInferior(targetTela) {
+    const nav = document.getElementById('main-nav');
+    if (!nav) return;
+
+    nav.querySelectorAll('.nav-item').forEach((item) => item.classList.remove('active'));
+    const ativo = nav.querySelector(`.nav-item[data-nav-target="${targetTela}"]`);
+    if (ativo) ativo.classList.add('active');
+
+    requestAnimationFrame(atualizarIndicadorMenuInferior);
+}
+
+function ativarAbaChat() {
+    ativarMenuInferior('view-chat');
+    alert('Chat em breve');
+}
+
+window.addEventListener('resize', () => {
+    requestAnimationFrame(atualizarIndicadorMenuInferior);
+});
+
+function navegar(idTela) {
+    if (idTela === 'view-perfil' && window.usuarioLogado) {
+        const dados = window.usuarioLogado;
+        if (document.getElementById('perfil-nome-display')) {
+            document.getElementById('perfil-nome-display').innerText = dados.nome || 'Usuário';
+            document.getElementById('perfil-insta-display').innerText = dados.instagram || '@seuinsta';
+            document.getElementById('perfil-foto-display').src = dados.foto || 'https://via.placeholder.com/110';
         }
-        // --- C?"DIGO DO SWIPE (DESLIZAR) ---
-        let touchStartX = 0;
+    }
+
+    document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
+    const target = document.getElementById(idTela);
+    if (target) target.classList.add('active');
+
+    if (idTela !== 'view-novo-envio') {
+        const passos = ['envio-p1', 'envio-p2', 'envio-p3', 'envio-p4', 'envio-p5', 'envio-v-veiculo'];
+        passos.forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.classList.add('hidden');
+        });
+        const p1 = document.getElementById('envio-p1');
+        if (p1) p1.classList.remove('hidden');
+
+        if (typeof fecharModalEnvioDetalhes === 'function') fecharModalEnvioDetalhes();
+        if (typeof fecharModalNovoCliente === 'function') fecharModalNovoCliente();
+        if (typeof fecharSeletorCliente === 'function') fecharSeletorCliente();
+    }
+
+    if (idTela === 'view-novo-envio') {
+        if (typeof initClienteSearch === 'function') initClienteSearch();
+        if (typeof initClientes === 'function') initClientes();
+    }
+    if (idTela === 'view-rotas') {
+        if (typeof renderRotasTelaPrincipal === 'function') renderRotasTelaPrincipal();
+    }
+
+    const nav = document.getElementById('main-nav');
+    const telasComMenu = ['view-dash-loja', 'view-novo-envio', 'view-rotas', 'view-perfil'];
+
+    if (nav) {
+        nav.style.display = telasComMenu.includes(idTela) ? 'flex' : 'none';
+    }
+
+    document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
+
+    const menuMap = {
+        'view-dash-loja': 1,
+        'view-rotas': 2,
+        'view-chat': 4,
+        'view-perfil': 5
+    };
+
+    if (menuMap[idTela]) {
+        const activeItem = document.querySelector(`.nav-item:nth-child(${menuMap[idTela]})`);
+        if (activeItem) activeItem.classList.add('active');
+    }
+
+    window.scrollTo(0, 0);
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+// --- CÓDIGO DO SWIPE (DESLIZAR) ---
+let touchStartX = 0;
         let activeCard = null;
         let pendingDeleteClientId = null;
 
@@ -1018,7 +1005,10 @@ let resumoRevisaoAtual = {
     duracaoMin: null,
     totalFrete: null,
     servico: 'Standard',
-    veiculo: 'Moto'
+    veiculo: 'Moto',
+    valorConteudo: null,
+    descricao: '',
+    observacoes: ''
 };
 
 
@@ -1067,6 +1057,58 @@ function precoParaMoeda(preco) {
 }
 
 const GOOGLE_MAPS_KEY = (window.FLEXA_GOOGLE_MAPS_KEY || '').trim();
+const MERCADO_PAGO_ACCESS_TOKEN = (window.FLEXA_MP_ACCESS_TOKEN || '').trim();
+const MERCADO_PAGO_PUBLIC_KEY = (window.FLEXA_MP_PUBLIC_KEY || '').trim();
+const MERCADO_PAGO_API_BASE = 'https://api.mercadopago.com';
+
+function gerarIdempotencyKey() {
+    if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+        return window.crypto.randomUUID();
+    }
+    return 'flexa-' + Date.now() + '-' + Math.random().toString(16).slice(2, 12);
+}
+
+function obterNomeLojistaSeparado() {
+    const nomeCompleto = (window.usuarioLogado?.nome || 'Lojista Flexa').toString().trim();
+    const partes = nomeCompleto.split(/\s+/).filter(Boolean);
+    const firstName = partes[0] || 'Lojista';
+    const lastName = partes.slice(1).join(' ') || 'Flexa';
+    return { firstName, lastName };
+}
+
+function obterEmailPagadorMercadoPago() {
+    const email = (
+        auth.currentUser?.email ||
+        window.usuarioLogado?.email ||
+        'cliente_teste@flexa.app'
+    ).toString().trim().toLowerCase();
+    return email.includes('@') ? email : 'cliente_teste@flexa.app';
+}
+
+function setStatusPagamentoPixRota(texto, tipo = 'pending') {
+    const statusEl = document.getElementById('rota-pix-status');
+    if (!statusEl) return;
+    statusEl.innerText = texto || '--';
+    statusEl.classList.remove(
+        'rota-pix-status-pending',
+        'rota-pix-status-approved',
+        'rota-pix-status-warning',
+        'rota-pix-status-loading'
+    );
+    statusEl.classList.add('rota-pix-status-' + tipo);
+}
+
+function setTicketPagamentoPixRota(url = '') {
+    const link = document.getElementById('rota-pix-ticket-link');
+    if (!link) return;
+    if (url) {
+        link.href = url;
+        link.style.display = 'inline-flex';
+    } else {
+        link.removeAttribute('href');
+        link.style.display = 'none';
+    }
+}
 
 function formatarEnderecoEstruturado(end) {
     if (!end) return '';
@@ -1455,8 +1497,6 @@ function atualizarPrecoEstimadoAtual() {
     resumoRevisaoAtual.servico = servico;
     resumoRevisaoAtual.veiculo = veiculoSelecionado;
     resumoRevisaoAtual.totalFrete = total;
-    const inputValor = document.getElementById('input-valor');
-    if (inputValor) inputValor.value = total.toFixed(2);
     const revTotal = document.getElementById('rev-total');
     if (revTotal) revTotal.innerText = precoParaMoeda(total);
     atualizarPrecosCardsVeiculo(servico, distanciaKm);
@@ -1517,6 +1557,12 @@ function selecionarVeiculo(tipo, preco) {
 }
 
 async function irParaVeiculos() {
+    const inputDesc = (document.getElementById('input-desc')?.value || '').trim();
+    const inputValorConteudo = parseMoedaParaNumero(document.getElementById('input-valor')?.value || 0);
+    resumoRevisaoAtual.descricao = inputDesc;
+    resumoRevisaoAtual.valorConteudo = Number.isFinite(inputValorConteudo) ? inputValorConteudo : 0;
+    resumoRevisaoAtual.observacoes = (document.getElementById('input-obs-envio')?.value || '').trim();
+
     setModalEnvioStep(2);
     await garantirEstimativaAtual();
     atualizarPrecoEstimadoAtual();
@@ -1558,7 +1604,6 @@ async function irParaRevisao() {
     const revDist = document.getElementById('rev-distancia'); if (revDist) revDist.innerText = formatarDistancia(distanciaKm);
     const revTempo = document.getElementById('rev-tempo'); if (revTempo) revTempo.innerText = formatarDuracao(duracaoMin);
     const revOrigem = document.getElementById('rev-origem'); if (revOrigem) revOrigem.innerText = enderecoOrigem || 'Defina o endereco da loja no Perfil';
-    const inputValor = document.getElementById('input-valor'); if (inputValor) inputValor.value = totalFrete.toFixed(2);
     if (!estimativa) {
         const detalheTxt = detalheRotaParaTexto(ultimoErroRota?.detalhe);
         alert(`Endereco invalido ou incompleto para rota.\n\nRetorno da API:\n${detalheTxt || (ultimoErroRota?.msg || 'Sem detalhe de erro.')}`);
@@ -1566,9 +1611,6 @@ async function irParaRevisao() {
     setModalEnvioStep(3);
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
-
-// Ativa o link de Rotas no menu inferior
-document.querySelector('.nav-item:nth-child(2)').onclick = () => navegar('view-rotas');
 
 function abrirCriarRota() {
     // Aqui simulamos que existem 3 envios pendentes no seu banco/memória
@@ -1881,26 +1923,808 @@ function buscarDadosDoBanco(uid) {
         }
     });
 }
-// Adicione ou substitua no seu <script>
+function getStatusVisualRota(status) {
+    const s = (status || '').toString().trim().toUpperCase();
+    if (s === 'EM_ROTA') return { label: 'EM ROTA', className: 'status-em-rota' };
+    if (s === 'FINALIZADA' || s === 'CONCLUIDA' || s === 'ENTREGUE') return { label: 'FINALIZADA', className: 'status-finalizada' };
+    if (s === 'CRIADA' || s === 'BUSCANDO') return { label: 'BUSCANDO', className: 'status-buscando' };
+    return { label: 'PENDENTE', className: 'status-pendente' };
+}
+
+function montarMapaEnviosPorId() {
+    const mapa = new Map();
+    clientes.forEach((cliente) => {
+        const historico = Array.isArray(cliente?.historico) ? cliente.historico : [];
+        const cidadeCliente = (cliente?.cidade || extrairCamposEnderecoCliente(cliente || {}).cidade || '').trim();
+        historico.forEach((h, idx) => {
+            const idAtual = h?.id || ('envio-' + cliente.id + '-' + idx);
+            const codigo = idAtual.replace('envio-', '').slice(-4);
+            mapa.set(idAtual, {
+                id: idAtual,
+                codigo,
+                clienteId: cliente.id,
+                destinatario: cliente.nome || 'Cliente',
+                whatsapp: cliente.whatsapp || '--',
+                cidade: cidadeCliente || '',
+                servico: h?.servico || 'Standard',
+                veiculo: h?.veiculo || 'Moto',
+                tamanho: h?.tamanho || '--',
+                valorFrete: Number.isFinite(Number(h?.valorFrete)) ? Number(h.valorFrete) : parseMoedaParaNumero(h?.valor || 0),
+                distanciaKm: Number.isFinite(Number(h?.distanciaKm)) ? Number(h.distanciaKm) : null,
+                duracaoMin: Number.isFinite(Number(h?.duracaoMin)) ? Number(h.duracaoMin) : null,
+                valorConteudo: Number.isFinite(Number(h?.valorConteudo)) ? Number(h.valorConteudo) : null,
+                descricao: (h?.descricao || '').toString().trim(),
+                observacoes: (h?.observacoes || '').toString().trim(),
+                origemEndereco: h?.origemEndereco || '--',
+                destinoEndereco: h?.destinoEndereco || cliente.endereco || '--',
+                status: (h?.status || 'PENDENTE').toUpperCase(),
+                criadoEm: Number(h?.criadoEm || Date.now())
+            });
+        });
+    });
+    return mapa;
+}
+
+function getPacotesDaRota(rota) {
+    const ids = Array.isArray(rota?.pacoteIds) ? rota.pacoteIds : (Array.isArray(rota?.pacotes) ? rota.pacotes : []);
+    const mapa = montarMapaEnviosPorId();
+    return ids.map((id) => mapa.get(id)).filter(Boolean);
+}
+
+async function carregarRotasDoBanco() {
+    const uid = getUsuarioIdAtual();
+    if (!uid) return [];
+    try {
+        const snap = await db.ref('usuarios/' + uid + '/rotas').once('value');
+        const data = snap.val() || {};
+        return Object.keys(data).map((id) => ({ id, ...data[id] })).sort((a, b) => Number(b.criadoEm || 0) - Number(a.criadoEm || 0));
+    } catch (err) {
+        console.warn('Falha ao carregar rotas:', err);
+        return [];
+    }
+}
+
+function resumirCidadesRota(pacotes) {
+    const cidades = [...new Set(pacotes.map((p) => (p.cidade || '').trim()).filter(Boolean))];
+    if (!cidades.length) return { principal: 'Sem cidade', extras: 0, total: 0 };
+    return { principal: cidades[0], extras: Math.max(0, cidades.length - 1), total: cidades.length };
+}
+
+function calcularPesoTotalRota(pacotes) {
+    const pesoPorTamanho = { P: 1, M: 2, G: 5 };
+    return pacotes.reduce((acc, p) => {
+        const tam = (p.tamanho || '').toString().trim().toUpperCase();
+        return acc + (pesoPorTamanho[tam] || 1);
+    }, 0);
+}
+
+function formatarTamanhoTotalRota(pacotes) {
+    const counts = { P: 0, M: 0, G: 0 };
+    pacotes.forEach((p) => {
+        const t = (p.tamanho || '').toString().trim().toUpperCase();
+        if (counts[t] !== undefined) counts[t] += 1;
+    });
+    const partes = Object.keys(counts).filter((k) => counts[k] > 0).map((k) => `${counts[k]}x ${k}`);
+    return partes.length ? partes.join(' ') : '--';
+}
+
+async function renderRotasTelaPrincipal() {
+    const container = document.getElementById('rotas-main-list');
+    const link = document.getElementById('rotas-ver-todas');
+    if (!container) return;
+
+    container.innerHTML = '<div class="rota-main-empty">Carregando rotas...</div>';
+
+    const rotas = await carregarRotasDoBanco();
+    rotasHomeCache = rotas;
+
+    if (!rotas.length) {
+        container.innerHTML = '<div class="rota-main-empty">Você ainda não criou nenhuma rota.</div>';
+        if (link) link.style.display = 'none';
+        return;
+    }
+
+    const lista = mostrarTodasRotasHome ? rotas : rotas.slice(0, 3);
+    if (link) {
+        link.style.display = rotas.length > 3 ? 'inline-flex' : 'none';
+        link.innerText = mostrarTodasRotasHome ? 'Ver menos' : 'Ver todas';
+    }
+
+    container.innerHTML = lista.map((rota) => {
+        const pacotes = getPacotesDaRota(rota);
+        const resumo = resumirCidadesRota(pacotes);
+        const status = getStatusVisualRota(rota?.status || rota?.pagamentoStatus || 'CRIADA');
+        const total = Number.isFinite(Number(rota?.totalFrete))
+            ? Number(rota.totalFrete)
+            : pacotes.reduce((acc, p) => acc + Number(p.valorFrete || 0), 0);
+        const qtd = Number(rota?.quantidade || pacotes.length || 0);
+        const cidadeLabel = resumo.extras > 0 ? `${resumo.principal} +${resumo.extras}` : resumo.principal;
+
+        return `
+            <button type="button" class="rota-main-card" onclick="abrirModalDetalheRota('${String(rota.id).replace(/'/g, "\\'")}')">
+                <div class="rota-main-icon"><i data-lucide="package"></i></div>
+                <div class="rota-main-info">
+                    <div class="rota-main-top-row">
+                        <span class="rota-main-id">ID: ${rota.id}</span>
+                        <div class="rota-main-badges">
+                            <span class="rota-main-status ${status.className}">${status.label}</span>
+                        </div>
+                    </div>
+                    <div class="rota-main-city"><strong>${cidadeLabel}</strong></div>
+                    <div class="rota-main-meta">${qtd} pacote(s) • ${precoParaMoeda(total)}</div>
+                </div>
+            </button>
+        `;
+    }).join('');
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function verTodasAsRotas(event) {
+    if (event) event.preventDefault();
+    mostrarTodasRotasHome = !mostrarTodasRotasHome;
+    renderRotasTelaPrincipal();
+    return false;
+}
+
+function atualizarResumoModalDetalheRota() {
+    if (!rotaDetalheAtual) return;
+
+    const pacotes = rotaDetalhePacotes;
+    const distanciaTotal = pacotes.reduce((acc, p) => acc + (Number.isFinite(p.distanciaKm) ? Number(p.distanciaKm) : 0), 0);
+    const duracaoTotal = pacotes.reduce((acc, p) => acc + (Number.isFinite(p.duracaoMin) ? Number(p.duracaoMin) : 0), 0);
+    const valorTotal = Number.isFinite(Number(rotaDetalheAtual?.totalFrete))
+        ? Number(rotaDetalheAtual.totalFrete)
+        : pacotes.reduce((acc, p) => acc + Number(p.valorFrete || 0), 0);
+    const pesoTotal = calcularPesoTotalRota(pacotes);
+    const tamanhoTotal = formatarTamanhoTotalRota(pacotes);
+
+    const status = getStatusVisualRota(rotaDetalheAtual?.status || rotaDetalheAtual?.pagamentoStatus || 'CRIADA');
+
+    const idEl = document.getElementById('rota-detalhe-id');
+    const statusEl = document.getElementById('rota-detalhe-status');
+    const distEl = document.getElementById('rota-detalhe-distancia');
+    const durEl = document.getElementById('rota-detalhe-duracao');
+    const paradasEl = document.getElementById('rota-detalhe-paradas');
+    const valorEl = document.getElementById('rota-detalhe-valor-total');
+    const pesoEl = document.getElementById('rota-detalhe-peso-total');
+    const tamEl = document.getElementById('rota-detalhe-tamanho-total');
+
+    if (idEl) idEl.innerText = rotaDetalheAtual.id || '--';
+    if (statusEl) {
+        statusEl.innerText = status.label;
+        statusEl.className = `rota-main-status ${status.className}`;
+    }
+    if (distEl) distEl.innerText = formatarDistancia(distanciaTotal);
+    if (durEl) durEl.innerText = formatarDuracao(duracaoTotal);
+    if (paradasEl) paradasEl.innerText = String(pacotes.length).padStart(2, '0');
+    if (valorEl) valorEl.innerText = precoParaMoeda(valorTotal);
+    if (pesoEl) pesoEl.innerText = `${pesoTotal.toFixed(1).replace('.', ',')} kg`;
+    if (tamEl) tamEl.innerText = tamanhoTotal;
+}
+
+function renderRotaDetalhePagina() {
+    const wrap = document.getElementById('rota-detalhe-page-wrap');
+    const dots = document.getElementById('rota-detalhe-dots');
+    const info = document.getElementById('rota-detalhe-page-info');
+    const btnPrev = document.getElementById('rota-detalhe-prev');
+    const btnNext = document.getElementById('rota-detalhe-next');
+    if (!wrap || !dots || !info || !btnPrev || !btnNext) return;
+
+    if (!rotaDetalhePacotes.length) {
+        wrap.innerHTML = '<div class="rota-detalhe-package-card"><p style="color:var(--text-sub); font-size:13px;">Sem pacotes vinculados a esta rota.</p></div>';
+        dots.innerHTML = '';
+        info.innerText = '0/0';
+        btnPrev.disabled = true;
+        btnNext.disabled = true;
+        return;
+    }
+
+    rotaDetalhePaginaAtual = Math.max(0, Math.min(rotaDetalhePaginaAtual, rotaDetalhePacotes.length - 1));
+    const p = rotaDetalhePacotes[rotaDetalhePaginaAtual];
+
+    wrap.innerHTML = `
+        <div class="rota-detalhe-package-card">
+            <h4>Pacote #${p.codigo} · ${p.destinatario}</h4>
+            <div class="rota-detalhe-line"><span>WhatsApp</span><strong>${p.whatsapp || '--'}</strong></div>
+            <div class="rota-detalhe-line"><span>Serviço</span><strong>${p.servico || '--'}</strong></div>
+            <div class="rota-detalhe-line"><span>Veículo</span><strong>${p.veiculo || '--'}</strong></div>
+            <div class="rota-detalhe-line"><span>Tamanho</span><strong>${p.tamanho || '--'}</strong></div>
+            <div class="rota-detalhe-line"><span>Distância</span><strong>${formatarDistancia(p.distanciaKm)}</strong></div>
+            <div class="rota-detalhe-line"><span>Duração</span><strong>${formatarDuracao(p.duracaoMin)}</strong></div>
+            <div class="rota-detalhe-line"><span>Valor frete</span><strong>${precoParaMoeda(p.valorFrete || 0)}</strong></div>
+            <div class="rota-detalhe-line"><span>Valor conteúdo</span><strong>${Number.isFinite(p.valorConteudo) ? precoParaMoeda(p.valorConteudo) : '--'}</strong></div>
+            <div class="rota-detalhe-block"><span>Descrição</span><p>${p.descricao || '--'}</p></div>
+            <div class="rota-detalhe-block"><span>Observações</span><p>${p.observacoes || '--'}</p></div>
+            <div class="rota-detalhe-block"><span>Origem</span><p>${p.origemEndereco || '--'}</p></div>
+            <div class="rota-detalhe-block"><span>Destino</span><p>${p.destinoEndereco || '--'}</p></div>
+        </div>
+    `;
+
+    dots.innerHTML = rotaDetalhePacotes.map((_, idx) => `<span class="rota-detalhe-dot ${idx === rotaDetalhePaginaAtual ? 'active' : ''}"></span>`).join('');
+    info.innerText = `${rotaDetalhePaginaAtual + 1}/${rotaDetalhePacotes.length}`;
+    btnPrev.disabled = rotaDetalhePaginaAtual <= 0;
+    btnNext.disabled = rotaDetalhePaginaAtual >= rotaDetalhePacotes.length - 1;
+}
+
+function abrirModalDetalheRota(rotaId) {
+    if (!rotaId) return;
+    const rota = rotasHomeCache.find((r) => String(r.id) === String(rotaId));
+    if (!rota) return;
+
+    rotaDetalheAtual = rota;
+    rotaDetalhePacotes = getPacotesDaRota(rota);
+    rotaDetalhePaginaAtual = 0;
+
+    atualizarResumoModalDetalheRota();
+    renderRotaDetalhePagina();
+
+    const overlay = document.getElementById('overlay-rota-detalhe');
+    const sheet = document.getElementById('sheet-rota-detalhe');
+    if (!overlay || !sheet) return;
+
+    overlay.style.display = 'flex';
+    requestAnimationFrame(() => sheet.classList.add('show'));
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function fecharModalDetalheRota() {
+    const overlay = document.getElementById('overlay-rota-detalhe');
+    const sheet = document.getElementById('sheet-rota-detalhe');
+    if (!overlay || !sheet) return;
+    sheet.classList.remove('show');
+    setTimeout(() => { overlay.style.display = 'none'; }, 240);
+}
+
+function paginaAnteriorDetalheRota() {
+    if (rotaDetalhePaginaAtual <= 0) return;
+    rotaDetalhePaginaAtual -= 1;
+    renderRotaDetalhePagina();
+}
+
+function proximaPaginaDetalheRota() {
+    if (rotaDetalhePaginaAtual >= rotaDetalhePacotes.length - 1) return;
+    rotaDetalhePaginaAtual += 1;
+    renderRotaDetalhePagina();
+}
+
+function iniciarSwipePaginaRota(event) {
+    rotaDetalheSwipeStartX = event.touches[0].clientX;
+    rotaDetalheSwipeEndX = rotaDetalheSwipeStartX;
+}
+
+function moverSwipePaginaRota(event) {
+    rotaDetalheSwipeEndX = event.touches[0].clientX;
+}
+
+function finalizarSwipePaginaRota() {
+    const diff = rotaDetalheSwipeEndX - rotaDetalheSwipeStartX;
+    if (Math.abs(diff) < 45) return;
+    if (diff < 0) {
+        proximaPaginaDetalheRota();
+    } else {
+        paginaAnteriorDetalheRota();
+    }
+}
+
+// Modal de criar rota (fluxo 3 passos)
 const overlayRota = document.getElementById('overlay-rota');
 const sheetRota = document.getElementById('sheet-rota');
 
+function gerarIdRota() {
+    return 'R' + Date.now().toString().slice(-8);
+}
+
+function normalizarCidadeRota(valor) {
+    return (valor || '').toString().trim().toLowerCase();
+}
+
+function coletarEnviosPendentesParaRota() {
+    const pendentes = [];
+
+    clientes.forEach((cliente) => {
+        const historico = Array.isArray(cliente.historico) ? cliente.historico : [];
+        const camposEndereco = extrairCamposEnderecoCliente(cliente || {});
+
+        historico.forEach((h, idx) => {
+            const statusAtual = (h.status || 'PENDENTE').toUpperCase();
+            if (statusAtual !== 'PENDENTE') return;
+
+            const envioId = h.id || ('envio-' + cliente.id + '-' + idx);
+            const codigo = envioId.replace('envio-', '').slice(-4);
+            const servico = h.servico || 'Standard';
+            const flash = servico.toLowerCase() === 'flash';
+            const cidade = (camposEndereco.cidade || cliente.cidade || 'Sem cidade').toString().trim() || 'Sem cidade';
+            const valorFrete = Number.isFinite(Number(h.valorFrete)) ? Number(h.valorFrete) : parseMoedaParaNumero(h.valor || 0);
+
+            pendentes.push({
+                id: envioId,
+                clienteId: cliente.id,
+                codigo,
+                destinatario: cliente.nome || 'Cliente',
+                cidade,
+                servico,
+                flash,
+                valorFrete,
+                veiculo: h.veiculo || 'Moto'
+            });
+        });
+    });
+
+    return pendentes.sort((a, b) => (a.codigo < b.codigo ? 1 : -1));
+}
+
+function atualizarResumoSelecaoRota() {
+    const totalEl = document.getElementById('rota-selected-total');
+    const cidadesEl = document.getElementById('rota-selected-cities');
+    const actionBtn = document.getElementById('rota-flow-action-btn');
+
+    const selecionados = rotaPendentesCache.filter((p) => rotaSelecaoIds.has(p.id));
+    const cidades = new Set(selecionados.map((p) => normalizarCidadeRota(p.cidade)).filter(Boolean));
+
+    if (totalEl) totalEl.innerText = selecionados.length + ' pacotes selecionados';
+    if (cidadesEl) cidadesEl.innerText = cidades.size + '/3 cidades';
+    if (actionBtn && rotaModalStep === 1) actionBtn.disabled = selecionados.length === 0;
+}
+
+function renderListaPendentesRota() {
+    const container = document.getElementById('rota-pending-list');
+    if (!container) return;
+
+    if (!rotaPendentesCache.length) {
+        container.innerHTML = '<div class="rota-flow-empty">Você não tem envios pendentes para montar rota.</div>';
+        atualizarResumoSelecaoRota();
+        return;
+    }
+
+    container.innerHTML = rotaPendentesCache.map((pacote) => {
+        const selecionado = rotaSelecaoIds.has(pacote.id);
+        const badgeClass = pacote.flash ? 'rota-badge-flash' : 'rota-badge-standard';
+        const badgeText = pacote.flash ? 'FLASH' : 'STANDARD';
+        const cityText = pacote.cidade || 'Sem cidade';
+
+        return `
+            <button type="button" class="rota-pending-item ${selecionado ? 'selected' : ''}" onclick="togglePacoteRota('${pacote.id}')">
+                <div class="rota-pending-main">
+                    <strong>Pedido #${pacote.codigo} - ${pacote.destinatario}</strong>
+                    <span>${cityText} • ${pacote.veiculo}</span>
+                </div>
+                <div class="rota-pending-meta">
+                    <span class="${badgeClass}">${badgeText}</span>
+                    <strong>${precoParaMoeda(pacote.valorFrete || 0)}</strong>
+                </div>
+            </button>
+        `;
+    }).join('');
+
+    atualizarResumoSelecaoRota();
+}
+
+function podeSelecionarPacoteRota(pacote) {
+    const selecionados = rotaPendentesCache.filter((item) => rotaSelecaoIds.has(item.id));
+
+    if (pacote.flash && selecionados.some((item) => item.flash)) {
+        alert('Regra Flash: apenas 1 pacote Flash por rota.');
+        return false;
+    }
+
+    const cidades = new Set(selecionados.map((item) => normalizarCidadeRota(item.cidade)).filter(Boolean));
+    cidades.add(normalizarCidadeRota(pacote.cidade));
+
+    if (cidades.size > 3) {
+        alert('Esta rota permite no máximo 3 cidades diferentes.');
+        return false;
+    }
+
+    return true;
+}
+
+function togglePacoteRota(envioId) {
+    const pacote = rotaPendentesCache.find((item) => item.id === envioId);
+    if (!pacote) return;
+
+    if (rotaSelecaoIds.has(envioId)) {
+        rotaSelecaoIds.delete(envioId);
+    } else {
+        if (!podeSelecionarPacoteRota(pacote)) return;
+        rotaSelecaoIds.add(envioId);
+    }
+
+    renderListaPendentesRota();
+}
+
+function renderEtapaModalRota() {
+    const step1 = document.getElementById('rota-flow-step-1');
+    const step2 = document.getElementById('rota-flow-step-2');
+    const step3 = document.getElementById('rota-flow-step-3');
+    const title = document.getElementById('rota-flow-title');
+    const label = document.getElementById('rota-flow-step-label');
+    const btn = document.getElementById('rota-flow-action-btn');
+    const backBtn = document.getElementById('rota-flow-back');
+
+    if (!step1 || !step2 || !step3 || !title || !label || !btn || !backBtn) return;
+
+    step1.classList.toggle('hidden', rotaModalStep !== 1);
+    step2.classList.toggle('hidden', rotaModalStep !== 2);
+    step3.classList.toggle('hidden', rotaModalStep !== 3);
+
+    if (rotaModalStep === 1) {
+        title.innerText = 'Criar Rota';
+        label.innerText = 'Passo 1 de 3';
+        btn.innerText = 'Pagamento';
+        btn.disabled = rotaSelecaoIds.size === 0;
+        backBtn.style.visibility = 'hidden';
+    } else if (rotaModalStep === 2) {
+        title.innerText = 'Pagamento Pix';
+        label.innerText = 'Passo 2 de 3';
+        btn.innerText = 'Verificar pagamento';
+        btn.disabled = !rotaDraftAtual?.pagamentoMercadoPago?.pixCode;
+        backBtn.style.visibility = 'visible';
+    } else {
+        title.innerText = 'Rota Criada';
+        label.innerText = 'Passo 3 de 3';
+        btn.innerText = 'Concluir';
+        btn.disabled = false;
+        backBtn.style.visibility = 'hidden';
+    }
+}
+
+function gerarPixPayloadRota() {
+    if (!rotaDraftAtual) return '';
+    const randomPart = Math.random().toString(36).slice(2, 12).toUpperCase();
+    return 'PIX-FLEXA-ROTA-' + rotaDraftAtual.id + '-' + Date.now() + '-' + randomPart + '|TOTAL:' + rotaDraftAtual.totalFrete.toFixed(2);
+}
+
+async function criarPagamentoPixMercadoPago(rotaDraft) {
+    if (!MERCADO_PAGO_ACCESS_TOKEN) {
+        throw new Error('Token do Mercado Pago não configurado.');
+    }
+
+    const valor = Number(rotaDraft?.totalFrete || 0);
+    if (!Number.isFinite(valor) || valor <= 0) {
+        throw new Error('Valor da rota inválido para cobrança Pix.');
+    }
+
+    const { firstName, lastName } = obterNomeLojistaSeparado();
+    const body = {
+        transaction_amount: Number(valor.toFixed(2)),
+        description: 'Flexa Rota ' + rotaDraft.id + ' (' + rotaDraft.qtd + ' pacote(s))',
+        payment_method_id: 'pix',
+        payer: {
+            email: obterEmailPagadorMercadoPago(),
+            first_name: firstName,
+            last_name: lastName
+        },
+        external_reference: rotaDraft.id,
+        metadata: {
+            modulo: 'rota',
+            rotaId: rotaDraft.id,
+            quantidadePacotes: rotaDraft.qtd,
+            origem: 'flexa-web',
+            publicKeyConfigurada: !!MERCADO_PAGO_PUBLIC_KEY
+        }
+    };
+
+    const resp = await fetch(MERCADO_PAGO_API_BASE + '/v1/payments', {
+        method: 'POST',
+        headers: {
+            'Authorization': 'Bearer ' + MERCADO_PAGO_ACCESS_TOKEN,
+            'Content-Type': 'application/json',
+            'X-Idempotency-Key': gerarIdempotencyKey()
+        },
+        body: JSON.stringify(body)
+    });
+
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+        const detalhe = data?.message || data?.error || data?.cause?.[0]?.description || ('HTTP ' + resp.status);
+        throw new Error('Mercado Pago: ' + detalhe);
+    }
+
+    const tx = data?.point_of_interaction?.transaction_data || {};
+    const pixCode = (tx.qr_code || '').toString().trim();
+    if (!pixCode) {
+        throw new Error('Mercado Pago não retornou código Pix Copia e Cola.');
+    }
+
+    return {
+        provider: 'mercadopago',
+        paymentId: data?.id ? String(data.id) : '',
+        status: data?.status || 'pending',
+        statusDetail: data?.status_detail || '',
+        pixCode,
+        ticketUrl: tx.ticket_url || '',
+        qrCodeBase64: tx.qr_code_base64 || ''
+    };
+}
+
+async function consultarPagamentoPixMercadoPago(paymentId) {
+    if (!MERCADO_PAGO_ACCESS_TOKEN || !paymentId) return null;
+
+    const resp = await fetch(MERCADO_PAGO_API_BASE + '/v1/payments/' + paymentId, {
+        method: 'GET',
+        headers: {
+            'Authorization': 'Bearer ' + MERCADO_PAGO_ACCESS_TOKEN,
+            'Content-Type': 'application/json'
+        }
+    });
+
+    const data = await resp.json().catch(() => ({}));
+    if (!resp.ok) {
+        const detalhe = data?.message || data?.error || ('HTTP ' + resp.status);
+        throw new Error('Falha ao consultar pagamento: ' + detalhe);
+    }
+
+    return {
+        status: data?.status || 'pending',
+        statusDetail: data?.status_detail || ''
+    };
+}
+
+async function irParaPagamentoRota() {
+    const selecionados = rotaPendentesCache.filter((item) => rotaSelecaoIds.has(item.id));
+    if (!selecionados.length) {
+        alert('Selecione pelo menos 1 pacote para continuar.');
+        return;
+    }
+
+    const total = selecionados.reduce((acc, item) => acc + Number(item.valorFrete || 0), 0);
+
+    rotaDraftAtual = {
+        id: gerarIdRota(),
+        pacotes: selecionados.map((item) => item.id),
+        qtd: selecionados.length,
+        totalFrete: Number(total.toFixed(2)),
+        criadoEm: Date.now(),
+        pagamento: 'PENDENTE',
+        status: 'CRIADA',
+        pagamentoMercadoPago: null
+    };
+
+    const pixTxt = document.getElementById('rota-pix-code');
+    const pixQtd = document.getElementById('rota-pix-qtd');
+    const pixTotal = document.getElementById('rota-pix-total');
+    const pixFeedback = document.getElementById('rota-pix-copy-feedback');
+
+    if (pixTxt) pixTxt.innerText = 'Gerando código Pix...';
+    if (pixQtd) pixQtd.innerText = String(rotaDraftAtual.qtd);
+    if (pixTotal) pixTotal.innerText = precoParaMoeda(rotaDraftAtual.totalFrete);
+    if (pixFeedback) pixFeedback.innerText = '';
+    setTicketPagamentoPixRota('');
+    setStatusPagamentoPixRota('Gerando cobrança Pix no Mercado Pago...', 'loading');
+
+    rotaModalStep = 2;
+    renderEtapaModalRota();
+
+    try {
+        const pixPagamento = await criarPagamentoPixMercadoPago(rotaDraftAtual);
+        rotaDraftAtual.pagamentoMercadoPago = pixPagamento;
+
+        if (pixTxt) pixTxt.innerText = pixPagamento.pixCode;
+        setTicketPagamentoPixRota(pixPagamento.ticketUrl || '');
+        setStatusPagamentoPixRota('Pix gerado com sucesso. Aguardando pagamento.', 'pending');
+        renderEtapaModalRota();
+    } catch (erro) {
+        console.warn('Falha ao gerar Pix no Mercado Pago. Aplicando fallback de teste:', erro);
+        const codigoFallback = gerarPixPayloadRota();
+
+        rotaDraftAtual.pagamentoMercadoPago = {
+            provider: 'fallback',
+            paymentId: '',
+            status: 'pending',
+            statusDetail: 'fallback',
+            pixCode: codigoFallback,
+            ticketUrl: ''
+        };
+
+        if (pixTxt) pixTxt.innerText = codigoFallback;
+        setTicketPagamentoPixRota('');
+        setStatusPagamentoPixRota('Modo teste: código Pix simulado (Mercado Pago indisponível).', 'warning');
+        renderEtapaModalRota();
+    }
+}
+
+async function copiarCodigoPixRota() {
+    const pixTxt = document.getElementById('rota-pix-code');
+    const feedback = document.getElementById('rota-pix-copy-feedback');
+    const codigo = (pixTxt?.innerText || '').trim();
+
+    if (!codigo || codigo === '--') {
+        if (feedback) feedback.innerText = 'Código indisponível.';
+        return;
+    }
+
+    let copiado = false;
+
+    try {
+        if (navigator.clipboard && window.isSecureContext) {
+            await navigator.clipboard.writeText(codigo);
+            copiado = true;
+        }
+    } catch (_) {
+        copiado = false;
+    }
+
+    if (!copiado) {
+        const inputTemp = document.createElement('textarea');
+        inputTemp.value = codigo;
+        inputTemp.style.position = 'fixed';
+        inputTemp.style.opacity = '0';
+        document.body.appendChild(inputTemp);
+        inputTemp.focus();
+        inputTemp.select();
+        try {
+            copiado = document.execCommand('copy');
+        } catch (_) {
+            copiado = false;
+        }
+        document.body.removeChild(inputTemp);
+    }
+
+    if (feedback) {
+        feedback.innerText = copiado ? 'Código Pix copiado.' : 'Não foi possível copiar automaticamente.';
+    }
+}
+
+async function marcarEnviosEmRota(envioIds, rotaId) {
+    if (!Array.isArray(envioIds) || !envioIds.length) return;
+
+    clientes.forEach((cliente) => {
+        const historico = Array.isArray(cliente.historico) ? cliente.historico : [];
+        historico.forEach((h, idx) => {
+            const idAtual = h.id || ('envio-' + cliente.id + '-' + idx);
+            if (envioIds.includes(idAtual)) {
+                h.id = idAtual;
+                h.status = 'EM_ROTA';
+                h.rotaId = rotaId;
+                h.atualizadoEm = Date.now();
+            }
+        });
+        cliente.historico = historico;
+    });
+
+    await saveClientes();
+}
+
+async function salvarRotaNoBanco(rota) {
+    const uid = getUsuarioIdAtual();
+    if (!uid || !rota?.id) return;
+
+    const pagamentoMp = rota.pagamentoMercadoPago || {};
+    const payload = {
+        id: rota.id,
+        pacoteIds: rota.pacotes,
+        quantidade: rota.qtd,
+        totalFrete: rota.totalFrete,
+        pagamento: rota.pagamento || 'APROVADO',
+        status: 'CRIADA',
+        criadoEm: rota.criadoEm,
+        atualizadoEm: Date.now(),
+        pagamentoProvider: pagamentoMp.provider || 'manual',
+        pagamentoId: pagamentoMp.paymentId || null,
+        pagamentoStatus: pagamentoMp.status || rota.pagamento || 'APROVADO'
+    };
+
+    try {
+        await db.ref('usuarios/' + uid + '/rotas/' + rota.id).set(payload);
+    } catch (err) {
+        console.warn('Falha ao salvar rota no banco:', err);
+    }
+}
+
+async function confirmarPagamentoRota() {
+    if (!rotaDraftAtual) return;
+
+    const btn = document.getElementById('rota-flow-action-btn');
+    const textoOriginal = btn ? btn.innerText : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Verificando...';
+    }
+
+    try {
+        const pagamentoMp = rotaDraftAtual.pagamentoMercadoPago || null;
+
+        if (pagamentoMp?.provider === 'mercadopago' && pagamentoMp.paymentId) {
+            const statusAtual = await consultarPagamentoPixMercadoPago(pagamentoMp.paymentId);
+            rotaDraftAtual.pagamentoMercadoPago.status = statusAtual?.status || pagamentoMp.status || 'pending';
+            rotaDraftAtual.pagamentoMercadoPago.statusDetail = statusAtual?.statusDetail || pagamentoMp.statusDetail || '';
+
+            if (rotaDraftAtual.pagamentoMercadoPago.status === 'approved') {
+                setStatusPagamentoPixRota('Pagamento aprovado no Mercado Pago.', 'approved');
+            } else {
+                setStatusPagamentoPixRota('Pagamento ainda pendente no Mercado Pago.', 'warning');
+                const liberarTeste = confirm('O pagamento ainda não está aprovado. Deseja liberar a rota mesmo assim em modo teste?');
+                if (!liberarTeste) {
+                    return;
+                }
+                rotaDraftAtual.pagamentoMercadoPago.status = 'test_override';
+            }
+        }
+
+        rotaDraftAtual.pagamento = 'APROVADO';
+        await marcarEnviosEmRota(rotaDraftAtual.pacotes, rotaDraftAtual.id);
+        await salvarRotaNoBanco(rotaDraftAtual);
+
+        const idEl = document.getElementById('rota-created-id');
+        if (idEl) idEl.innerText = rotaDraftAtual.id;
+
+        rotaModalStep = 3;
+        renderEtapaModalRota();
+        renderEnviosHome();
+        renderRotasTelaPrincipal();
+    } catch (erro) {
+        console.warn('Erro ao confirmar pagamento da rota:', erro);
+        alert('Não foi possível confirmar o pagamento agora. Tente novamente.');
+    } finally {
+        if (btn && rotaModalStep === 2) {
+            btn.disabled = false;
+            btn.innerText = textoOriginal || 'Verificar pagamento';
+        }
+    }
+}
+
+function iniciarModalRota() {
+    rotaModalStep = 1;
+    rotaSelecaoIds = new Set();
+    rotaDraftAtual = null;
+    rotaPendentesCache = coletarEnviosPendentesParaRota();
+
+    const pixTxt = document.getElementById('rota-pix-code');
+    const pixQtd = document.getElementById('rota-pix-qtd');
+    const pixTotal = document.getElementById('rota-pix-total');
+    const pixFeedback = document.getElementById('rota-pix-copy-feedback');
+    if (pixTxt) pixTxt.innerText = '--';
+    if (pixQtd) pixQtd.innerText = '0';
+    if (pixTotal) pixTotal.innerText = 'R$ 0,00';
+    if (pixFeedback) pixFeedback.innerText = '';
+    setTicketPagamentoPixRota('');
+    setStatusPagamentoPixRota('Aguardando geração do código...', 'pending');
+
+    renderListaPendentesRota();
+    renderEtapaModalRota();
+}
+
 function openModal() {
+    if (!overlayRota || !sheetRota) return;
+    iniciarModalRota();
     overlayRota.style.display = 'flex';
-    // Pequeno delay para permitir a transição CSS
     setTimeout(() => {
         sheetRota.classList.add('show');
+        if (typeof lucide !== 'undefined') lucide.createIcons();
     }, 10);
 }
 
 function closeModal() {
+    if (!overlayRota || !sheetRota) return;
     sheetRota.classList.remove('show');
     setTimeout(() => {
         overlayRota.style.display = 'none';
-    }, 400); // Tempo igual à transição CSS
+    }, 350);
 }
 
-// Atualize a inicialização dos Ícones caso necessário
+function voltarEtapaModalRota(event) {
+    if (event) event.stopPropagation();
+    if (rotaModalStep <= 1) {
+        closeModal();
+        return;
+    }
+    rotaModalStep -= 1;
+    renderEtapaModalRota();
+}
+
+async function acaoPrincipalModalRota() {
+    if (rotaModalStep === 1) {
+        await irParaPagamentoRota();
+        return;
+    }
+    if (rotaModalStep === 2) {
+        await confirmarPagamentoRota();
+        return;
+    }
+    closeModal();
+}
+
 lucide.createIcons();
 
 // Abrir Modal de Perfil e carregar dados atuais
@@ -2387,14 +3211,24 @@ function coletarEnviosDaBase() {
             envios.push({
                 id: h.id || `envio-${c.id}-${idx}`,
                 codigo: h.id ? h.id.replace('envio-', '').slice(-4) : String(idx + 1).padStart(4, '0'),
+                clienteId: c.id,
                 destinatario: c.nome || 'Cliente',
-                endereco: formatEnderecoDisplay(c.endereco || ''),
-                status: (h.servico || '').toLowerCase().includes('flash') ? 'Expresso' : 'Pendente',
+                whatsapp: c.whatsapp || '',
+                endereco: formatEnderecoDisplay(h.destinoEndereco || c.endereco || ''),
+                destinoCompleto: (h.destinoEndereco || montarEnderecoParaCalculo(c, c.endereco || '') || '').trim(),
+                origemCompleta: (h.origemEndereco || formatarEnderecoLojaParaCalculo(window.usuarioLogado?.endereco || {}) || obterEnderecoLojaTexto() || '').trim(),
+                status: (h.status || '').toUpperCase() === 'EM_ROTA' ? 'Em rota' : ((h.status || '').toUpperCase() === 'ENTREGUE' ? 'Entregue' : ((h.status || '').toUpperCase() === 'CANCELADO' ? 'Cancelado' : 'Pendente')),
                 valor: Number.isFinite(Number(h.valorFrete)) ? Number(h.valorFrete) : parseMoedaParaNumero(h.valor || 0),
+                valorConteudo: Number.isFinite(Number(h.valorConteudo)) ? Number(h.valorConteudo) : null,
                 servico: h.servico || 'Standard',
+                tamanho: h.tamanho || '',
                 veiculo: h.veiculo || 'Moto',
+                descricao: h.descricao || '',
+                observacoes: h.observacoes || c.obs || '',
                 distanciaKm: Number.isFinite(Number(h.distanciaKm)) ? Number(h.distanciaKm) : null,
                 duracaoMin: Number.isFinite(Number(h.duracaoMin)) ? Number(h.duracaoMin) : null,
+                origemGeo: normalizarGeo(h.origemGeo) || normalizarGeo(window.usuarioLogado?.endereco?.geo) || null,
+                destinoGeo: normalizarGeo(h.destinoGeo) || normalizarGeo(c.geo) || null,
                 criadoEm: h.criadoEm || Date.now()
             });
         });
@@ -2421,10 +3255,7 @@ function renderEnviosHome() {
     }
 
     container.innerHTML = envios.map((envio) => {
-        const data = new Date(envio.criadoEm || Date.now()).toLocaleDateString('pt-BR');
         const valor = Number(envio.valor || 0).toFixed(2).replace('.', ',');
-        const distanciaTxt = Number.isFinite(envio.distanciaKm) ? `${envio.distanciaKm.toFixed(1).replace('.', ',')} km` : '--';
-        const tempoTxt = Number.isFinite(envio.duracaoMin) ? `${Math.max(1, Math.round(envio.duracaoMin))} min` : '--';
         return `
             <div class="envio-swipe-container" id="envio-wrap-${envio.id}">
                 <div class="envio-swipe-delete">
@@ -2435,26 +3266,23 @@ function renderEnviosHome() {
                          data-envio-id="${envio.id}"
                          ontouchstart="handleEnvioTouchStart(event)"
                          ontouchmove="handleEnvioTouchMove(event)"
-                         ontouchend="handleEnvioTouchEnd(event)">
+                         ontouchend="handleEnvioTouchEnd(event)"
+                         onclick="abrirModalDetalheEnvio('${envio.id}', event)">
                     <button class="envio-delete-btn" type="button" onclick="confirmarExclusaoEnvio('${envio.id}'); event.stopPropagation();">
                         <i data-lucide="trash-2" size="14"></i>
                     </button>
-                    <div class="envio-item-top">
-                        <div>
+                    <div class="envio-item-top envio-item-top-compact">
+                        <div class="envio-item-main">
                             <div class="envio-item-kicker">Pedido #${envio.codigo}</div>
                             <div class="envio-item-name">${envio.destinatario}</div>
                         </div>
-                        <div>
+                        <div class="envio-item-side">
+                            <div class="envio-item-price">R$ ${valor}</div>
                             <div class="envio-item-status">${envio.status}</div>
                         </div>
                     </div>
-                    <div class="envio-item-meta">${envio.endereco}</div>
-                    <div class="envio-item-route">${envio.servico} • ${envio.veiculo} • ${distanciaTxt} • ${tempoTxt}</div>
-                    <div class="envio-item-top" style="margin-bottom:0; align-items:flex-end; margin-top:8px;">
-                        <div class="envio-item-meta">Atualizado ${data}</div>
-                        <div>
-                            <div class="envio-item-price">R$ ${valor}</div>
-                        </div>
+                    <div class="envio-item-line">
+                        <span class="envio-item-service">${envio.servico}</span>
                     </div>
                 </article>
             </div>
@@ -2462,6 +3290,101 @@ function renderEnviosHome() {
     }).join('');
 
     if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function preencherTextoDetalheEnvio(id, valor, fallback = '--') {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const texto = (valor === null || valor === undefined || valor === '') ? fallback : String(valor);
+    el.textContent = texto;
+}
+
+function montarLinkMapaEnvio(envio) {
+    const origem = (envio?.origemCompleta || '').trim();
+    const destino = (envio?.destinoCompleto || '').trim();
+    if (!destino) return '';
+    const params = new URLSearchParams({ api: '1', destination: destino, travelmode: 'driving' });
+    if (origem) params.set('origin', origem);
+    return 'https://www.google.com/maps/dir/?' + params.toString();
+}
+
+function abrirModalDetalheEnvio(envioId, event) {
+    if (event) event.stopPropagation();
+    if (!envioId) return;
+
+    const card = document.getElementById(`envio-card-${envioId}`);
+    if (card?.dataset?.swiping === '1') return;
+    const transformAtual = card?.style?.transform || '';
+    if (transformAtual && transformAtual !== 'translateX(0)' && transformAtual !== 'translateX(0px)') {
+        fecharSwipesEnvio();
+        return;
+    }
+
+    const envio = coletarEnviosDaBase().find((item) => item.id === envioId);
+    if (!envio) return;
+
+    envioDetalheAtualId = envioId;
+
+    preencherTextoDetalheEnvio('envio-detalhe-pedido', `Pedido #${envio.codigo}`);
+    preencherTextoDetalheEnvio('envio-detalhe-cliente', envio.destinatario);
+    preencherTextoDetalheEnvio('envio-detalhe-whatsapp', envio.whatsapp || '--');
+    preencherTextoDetalheEnvio('envio-detalhe-servico', envio.servico || '--');
+    preencherTextoDetalheEnvio('envio-detalhe-veiculo', envio.veiculo || '--');
+    preencherTextoDetalheEnvio('envio-detalhe-tamanho', envio.tamanho || '--');
+    preencherTextoDetalheEnvio('envio-detalhe-distancia', formatarDistancia(envio.distanciaKm));
+    preencherTextoDetalheEnvio('envio-detalhe-duracao', formatarDuracao(envio.duracaoMin));
+    preencherTextoDetalheEnvio('envio-detalhe-valor-frete', precoParaMoeda(envio.valor || 0));
+    preencherTextoDetalheEnvio('envio-detalhe-valor-conteudo', Number.isFinite(envio.valorConteudo) ? precoParaMoeda(envio.valorConteudo) : '--');
+    preencherTextoDetalheEnvio('envio-detalhe-descricao', envio.descricao || '--');
+    preencherTextoDetalheEnvio('envio-detalhe-observacoes', envio.observacoes || '--');
+    preencherTextoDetalheEnvio('envio-detalhe-origem', envio.origemCompleta || '--');
+    preencherTextoDetalheEnvio('envio-detalhe-destino', envio.destinoCompleto || '--');
+    preencherTextoDetalheEnvio('envio-detalhe-criado-em', new Date(envio.criadoEm || Date.now()).toLocaleString('pt-BR'));
+
+    const statusEl = document.getElementById('envio-detalhe-status');
+    if (statusEl) statusEl.textContent = envio.status || 'Pendente';
+
+    const mapIframe = document.getElementById('envio-detalhe-map');
+    if (mapIframe) {
+        const destinoMapa = (envio.destinoCompleto || envio.endereco || '').trim();
+        mapIframe.src = destinoMapa ? `https://www.google.com/maps?q=${encodeURIComponent(destinoMapa)}&output=embed` : 'about:blank';
+    }
+
+    const mapaLink = document.getElementById('envio-detalhe-link-mapa');
+    if (mapaLink) {
+        const href = montarLinkMapaEnvio(envio);
+        if (href) {
+            mapaLink.href = href;
+            mapaLink.style.display = 'inline-flex';
+        } else {
+            mapaLink.removeAttribute('href');
+            mapaLink.style.display = 'none';
+        }
+    }
+
+    const modal = document.getElementById('modal-detalhe-envio');
+    if (!modal) return;
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => modal.classList.add('is-open'));
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function fecharModalDetalheEnvio() {
+    envioDetalheAtualId = null;
+    const modal = document.getElementById('modal-detalhe-envio');
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    setTimeout(() => {
+        modal.style.display = 'none';
+    }, 220);
+}
+
+function excluirEnvioAtualNoModal() {
+    if (!envioDetalheAtualId) return;
+    const id = envioDetalheAtualId;
+    fecharModalDetalheEnvio();
+    setTimeout(() => confirmarExclusaoEnvio(id), 140);
 }
 
 function excluirEnvioPorId(envioId) {
@@ -2489,6 +3412,7 @@ function confirmarExclusaoEnvio(envioId) {
     }
     saveClientes();
     renderEnviosHome();
+    if (envioDetalheAtualId === envioId) fecharModalDetalheEnvio();
 }
 
 let envioTouchStartX = 0;
@@ -2497,12 +3421,14 @@ let envioCardAtivo = null;
 function handleEnvioTouchStart(e) {
     envioCardAtivo = e.currentTarget;
     envioTouchStartX = e.touches[0].clientX;
+    if (envioCardAtivo) envioCardAtivo.dataset.swiping = '0';
     fecharSwipesEnvio(envioCardAtivo.id);
 }
 
 function handleEnvioTouchMove(e) {
     if (!envioCardAtivo) return;
     const diff = e.touches[0].clientX - envioTouchStartX;
+    if (Math.abs(diff) > 8) envioCardAtivo.dataset.swiping = '1';
     if (diff > 0) {
         envioCardAtivo.style.transform = 'translateX(0)';
         return;
@@ -2513,11 +3439,13 @@ function handleEnvioTouchMove(e) {
 
 function handleEnvioTouchEnd(e) {
     if (!envioCardAtivo) return;
+    const card = envioCardAtivo;
     const diff = e.changedTouches[0].clientX - envioTouchStartX;
-    envioCardAtivo.style.transition = 'transform 0.22s ease';
-    envioCardAtivo.style.transform = diff < -52 ? 'translateX(-92px)' : 'translateX(0)';
+    card.style.transition = 'transform 0.22s ease';
+    card.style.transform = diff < -52 ? 'translateX(-92px)' : 'translateX(0)';
     setTimeout(() => {
-        if (envioCardAtivo) envioCardAtivo.style.transition = '';
+        card.style.transition = '';
+        card.dataset.swiping = '0';
     }, 220);
     envioCardAtivo = null;
 }
@@ -2536,12 +3464,14 @@ initClientes = async function initClientesNovaHome() {
     await _initClientesOriginal();
     renderClientesSelector(document.getElementById('buscar-cliente')?.value || '');
     renderEnviosHome();
+    renderRotasTelaPrincipal();
 };
 
 const _confirmarEnvioFinalOriginal = confirmarEnvioFinal;
 confirmarEnvioFinal = function confirmarEnvioFinalNovaHome() {
     _confirmarEnvioFinalOriginal();
     renderEnviosHome();
+    renderRotasTelaPrincipal();
 };
 
 const _abrirNovoClienteOriginal = abrirNovoCliente;

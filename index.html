@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
@@ -259,57 +259,116 @@
         <p style="color: var(--text-sub); font-size: 14px; margin-top: 6px;">Crie uma nova rota para seus entregadores</p>
     </div>
 
-    <div class="list-header" style="display: flex; justify-content: space-between; padding: 0 5px 15px; font-weight: 800; font-size: 16px; align-items: center;">
+    <div class="list-header rota-main-header">
     <span>Rotas aguardando</span>
 
-    <a href="#" onclick="verTodasAsRotas()" style="text-decoration: none; color: var(--brand-orange); font-size: 13px; font-weight: 700;">
+    <a id="rotas-ver-todas" href="#" onclick="return verTodasAsRotas(event)" class="rota-main-link-ver-todas">
         Ver todas
     </a>
 </div>
 
-    <div class="routes-list" style="padding: 0;">
-        <div class="route-card" style="background: white; padding: 16px; border-radius: 20px; display: flex; align-items: center; gap: 15px; margin-bottom: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.02);">
-            <div class="icon-box" style="width: 50px; height: 50px; background: #F1F3F5; border-radius: 15px; display: flex; align-items: center; justify-content: center; color: var(--text-main);">
-                <i data-lucide="package" size="24"></i>
-            </div>
-            <div class="route-info" style="flex: 1;">
-                <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 3px;">ID: R5422109</h4>
-                <p style="font-size: 12px; color: var(--text-sub); font-weight: 500;">Mec Mini M4 Pro . 1.2km de você</p>
-            </div>
-            <div class="status-tag" style="padding: 6px 10px; border-radius: 8px; font-size: 10px; font-weight: 800; background: #FFF0EB; color: var(--brand-orange); text-transform: uppercase;">BUSCANDO</div>
-        </div>
-
-        <div class="route-card" style="background: white; padding: 16px; border-radius: 20px; display: flex; align-items: center; gap: 15px; margin-bottom: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.02);">
-            <div class="icon-box" style="width: 50px; height: 50px; background: #F1F3F5; border-radius: 15px; display: flex; align-items: center; justify-content: center; color: var(--text-main);">
-                <i data-lucide="package" size="24"></i>
-            </div>
-            <div class="route-info" style="flex: 1;">
-                <h4 style="font-size: 14px; font-weight: 700; margin-bottom: 3px;">ID: R37883809</h4>
-                <p style="font-size: 12px; color: var(--text-sub); font-weight: 500;">Drone DJI Neo . 0.8km de você</p>
-            </div>
-            <div class="status-tag" style="padding: 6px 10px; border-radius: 8px; font-size: 10px; font-weight: 800; background: #FFF0EB; color: var(--brand-orange); text-transform: uppercase;">BUSCANDO</div>
-        </div>
+    <div id="rotas-main-list" class="rotas-main-list">
+        <div class="rota-main-empty">Você ainda não criou nenhuma rota.</div>
     </div>
 </section>
 
-<div class="modal-overlay" id="overlay-rota" onclick="closeModal()" style="position: fixed; inset: 0; background: rgba(0,0,0,0.4); display: none; z-index: 1100; backdrop-filter: blur(4px); align-items: flex-end;">
-    <div class="modal-sheet" id="sheet-rota" onclick="event.stopPropagation()" style="width: 100%; background: white; border-radius: 30px 30px 0 0; padding: 35px 25px 50px; transform: translateY(100%); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);">
-        <div class="modal-handle" style="width: 40px; height: 4px; background: #E9ECEF; border-radius: 10px; margin: -15px auto 25px;"></div>
-        <h2 style="font-size: 22px; font-weight: 800; margin-bottom: 10px;">Opções de Entrega</h2>
-        <p style="color: var(--text-sub); margin-bottom: 25px; font-size: 15px;">Selecione como deseja criar sua rota no Flexa.</p>
+<div class="modal-overlay rota-flow-overlay" id="overlay-rota" onclick="closeModal()" style="position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: none; z-index: 12000; backdrop-filter: blur(6px); align-items: flex-end;">
+    <div class="modal-sheet rota-flow-sheet" id="sheet-rota" onclick="event.stopPropagation()" style="width: 100%; background: white; border-radius: 30px 30px 0 0; transform: translateY(100%); transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);">
+        <div class="rota-flow-header">
+            <div class="modal-handle rota-flow-handle"></div>
+            <div class="rota-flow-header-row">
+                <button type="button" class="rota-flow-icon-btn" id="rota-flow-back" onclick="voltarEtapaModalRota(event)">
+                    <i data-lucide="arrow-left" size="18"></i>
+                </button>
+                <h2 id="rota-flow-title">Criar Rota</h2>
+                <button type="button" class="rota-flow-icon-btn" onclick="closeModal()">×</button>
+            </div>
+            <div id="rota-flow-step-label" class="rota-flow-step-label">Passo 1 de 3</div>
+        </div>
 
-        <div style="display: grid; gap: 12px;">
-            <button style="width: 100%; padding: 20px; background: var(--brand-orange); color: white; border: none; border-radius: 18px; font-weight: 700; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer;">
-                <i data-lucide="zap" size="20"></i> Rota Expressa
-            </button>
-            <button style="width: 100%; padding: 20px; background: #F1F3F5; color: var(--text-main); border: none; border-radius: 18px; font-weight: 700; font-size: 16px; display: flex; align-items: center; justify-content: center; gap: 10px; cursor: pointer;">
-                <i data-lucide="calendar" size="20"></i> Agendar Rota
-            </button>
+        <div class="rota-flow-body">
+            <section id="rota-flow-step-1">
+                <p class="rota-flow-help">Selecione envios pendentes. Regra Flash: apenas 1 pacote Flash por rota. Máximo de 3 cidades por rota.</p>
+                <div class="rota-flow-counter">
+                    <span id="rota-selected-total">0 pacotes selecionados</span>
+                    <span id="rota-selected-cities">0/3 cidades</span>
+                </div>
+                <div id="rota-pending-list" class="rota-pending-list"></div>
+            </section>
+
+            <section id="rota-flow-step-2" class="hidden">
+                <p class="rota-flow-help">Use o Pix Copia e Cola para pagar e liberar a rota para os entregadores.</p>
+                <div class="rota-pix-card">
+                    <span class="rota-pix-label">Pix Copia e Cola</span>
+                    <div id="rota-pix-code" class="rota-pix-code-text">--</div>
+                    <button id="rota-pix-copy-btn" type="button" class="rota-pix-copy-btn" onclick="copiarCodigoPixRota()">Copiar código Pix</button>
+                    <span id="rota-pix-copy-feedback" class="rota-pix-copy-feedback"></span>
+                    <div id="rota-pix-status" class="rota-pix-status rota-pix-status-pending">Aguardando geração do código...</div>
+                    <a id="rota-pix-ticket-link" class="rota-pix-ticket-link" href="#" target="_blank" rel="noopener noreferrer" style="display:none;">Abrir cobrança no Mercado Pago</a>
+                    <div class="rota-pix-meta">
+                        <span>Pacotes: <strong id="rota-pix-qtd">0</strong></span>
+                        <span>Total: <strong id="rota-pix-total">R$ 0,00</strong></span>
+                    </div>
+                </div>
+            </section>
+
+            <section id="rota-flow-step-3" class="hidden">
+                <div class="rota-flow-success-icon">✓</div>
+                <h3 class="rota-flow-success-title">Pagamento aprovado</h3>
+                <p class="rota-flow-help" style="text-align:center;">Rota criada com sucesso e disponível para os entregadores.</p>
+                <div class="rota-created-id-box">
+                    <span>ID da rota</span>
+                    <strong id="rota-created-id">R00000000</strong>
+                </div>
+            </section>
+        </div>
+
+        <div class="rota-flow-footer">
+            <button id="rota-flow-action-btn" class="btn-main" type="button" onclick="acaoPrincipalModalRota()">Pagamento</button>
         </div>
     </div>
 </div>
 
-   <nav id="main-nav" style="display: none;">
+<div id="overlay-rota-detalhe" class="modal-overlay rota-detalhe-overlay" onclick="fecharModalDetalheRota()" style="display:none;">
+    <div id="sheet-rota-detalhe" class="modal-sheet rota-detalhe-sheet" onclick="event.stopPropagation()">
+        <div class="rota-detalhe-header">
+            <div class="modal-handle"></div>
+            <div class="rota-detalhe-header-row">
+                <h2>Detalhes da Rota</h2>
+                <button type="button" class="rota-flow-icon-btn" onclick="fecharModalDetalheRota()">×</button>
+            </div>
+
+            <div class="rota-detalhe-id-row">
+                <strong id="rota-detalhe-id">--</strong>
+                <span id="rota-detalhe-status" class="rota-main-status status-buscando">BUSCANDO</span>
+            </div>
+
+            <div class="rota-detalhe-summary-grid">
+                <div><span>Distância total</span><strong id="rota-detalhe-distancia">--</strong></div>
+                <div><span>Duração total</span><strong id="rota-detalhe-duracao">--</strong></div>
+                <div><span>Paradas</span><strong id="rota-detalhe-paradas">0</strong></div>
+                <div><span>Valor total</span><strong id="rota-detalhe-valor-total">R$ 0,00</strong></div>
+                <div><span>Peso total</span><strong id="rota-detalhe-peso-total">0 kg</strong></div>
+                <div><span>Tamanho total</span><strong id="rota-detalhe-tamanho-total">--</strong></div>
+            </div>
+        </div>
+
+        <div class="rota-detalhe-body">
+            <div id="rota-detalhe-page-wrap" ontouchstart="iniciarSwipePaginaRota(event)" ontouchmove="moverSwipePaginaRota(event)" ontouchend="finalizarSwipePaginaRota(event)"></div>
+        </div>
+
+        <div class="rota-detalhe-footer">
+            <div id="rota-detalhe-dots" class="rota-detalhe-dots"></div>
+            <div class="rota-detalhe-nav">
+                <button id="rota-detalhe-prev" type="button" onclick="paginaAnteriorDetalheRota()">Anterior</button>
+                <span id="rota-detalhe-page-info">0/0</span>
+                <button id="rota-detalhe-next" type="button" onclick="proximaPaginaDetalheRota()">Próximo</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<nav id="main-nav" style="display: none;">
     <a href="#" class="nav-item active" onclick="navegar('view-dash-loja')">
         <i data-lucide="home"></i>
         <span>Início</span>
@@ -479,6 +538,13 @@
                 </div>
             </div>
 
+            <div class="form-group">
+                <span class="section-title">Observações (Opcional)</span>
+                <div class="input-wrapper">
+                    <input type="text" id="input-obs-envio" placeholder="Ex: Entregar depois das 18h">
+                </div>
+            </div>
+
             <span class="section-title">Tipo de Serviço</span>
             <div class="selection-grid">
                 <div class="select-box active" id="srv-std" onclick="selecionarServico('Standard')">
@@ -611,7 +677,7 @@
                 </p>
                 <div style="background: white; padding: 15px; border-radius: 16px; border: 1px solid var(--border-color); display: inline-block;">
                     <span style="display:block; font-size:12px; color:var(--text-sub); text-transform:uppercase; font-weight:700; margin-bottom:5px;">Código do Pedido</span>
-                    <strong style="font-size:18px;">#8829</strong>
+                    <strong id="codigo-pedido-solicitado" style="font-size:18px;">#----</strong>
                 </div>
                 <button class="btn-main" onclick="fecharModalEnvioDetalhes()" style="margin-top: 25px;">Voltar para o Início</button>
             </div>
@@ -709,12 +775,82 @@
         <div id="historico-list" style="flex: 1; overflow-y: auto; padding-right: 5px;"></div>
     </div>
 </div>
+<div id="modal-detalhe-envio" class="modal-perfil-overlay" onclick="fecharModalDetalheEnvio()">
+    <div class="modal-perfil-sheet envio-detalhe-sheet" onclick="event.stopPropagation()">
+        <div class="sheet-header envio-detalhe-header">
+            <div class="selector-sheet-handle"></div>
+            <div class="sheet-header-row" style="margin-bottom: 0;">
+                <h2 class="sheet-title envio-detalhe-title">Detalhes do Envio</h2>
+                <button type="button" class="selector-close-btn" onclick="fecharModalDetalheEnvio()">×</button>
+            </div>
+        </div>
+
+        <div id="envio-detalhe-body" class="envio-detalhe-body">
+            <div class="envio-detalhe-card">
+                <div class="envio-detalhe-card-top">
+                    <span id="envio-detalhe-pedido" class="envio-detalhe-pedido">Pedido #----</span>
+                    <span id="envio-detalhe-status" class="envio-item-status">Pendente</span>
+                </div>
+                <strong id="envio-detalhe-cliente" class="envio-detalhe-cliente">--</strong>
+                <span id="envio-detalhe-whatsapp" class="envio-detalhe-whatsapp">--</span>
+            </div>
+
+            <div class="envio-detalhe-info-list">
+                <div class="envio-detalhe-info-row"><span>Distância</span><strong id="envio-detalhe-distancia">--</strong></div>
+                <div class="envio-detalhe-info-row"><span>Duração</span><strong id="envio-detalhe-duracao">--</strong></div>
+                <div class="envio-detalhe-info-row"><span>Tipo de serviço</span><strong id="envio-detalhe-servico">--</strong></div>
+                <div class="envio-detalhe-info-row"><span>Veículo</span><strong id="envio-detalhe-veiculo">--</strong></div>
+                <div class="envio-detalhe-info-row"><span>Valor do frete</span><strong id="envio-detalhe-valor-frete">--</strong></div>
+                <div class="envio-detalhe-info-row"><span>Tamanho do pacote</span><strong id="envio-detalhe-tamanho">--</strong></div>
+                <div class="envio-detalhe-info-row"><span>Valor do conteúdo</span><strong id="envio-detalhe-valor-conteudo">--</strong></div>
+            </div>
+
+            <div class="envio-detalhe-section">
+                <h4>Descrição do conteúdo</h4>
+                <p id="envio-detalhe-descricao">--</p>
+            </div>
+
+            <div class="envio-detalhe-section">
+                <h4>Observações</h4>
+                <p id="envio-detalhe-observacoes">--</p>
+            </div>
+
+            <div class="envio-detalhe-section">
+                <h4>Origem</h4>
+                <p id="envio-detalhe-origem">--</p>
+            </div>
+
+            <div class="envio-detalhe-section">
+                <h4>Destino</h4>
+                <p id="envio-detalhe-destino">--</p>
+            </div>
+
+            <div class="envio-detalhe-info-list">
+                <div class="envio-detalhe-info-row"><span>Criado em</span><strong id="envio-detalhe-criado-em">--</strong></div>
+            </div>
+
+            <div class="envio-detalhe-map-wrap">
+                <iframe id="envio-detalhe-map" title="Mapa do envio" loading="lazy" referrerpolicy="no-referrer-when-downgrade" src="about:blank"></iframe>
+            </div>
+
+            <a id="envio-detalhe-link-mapa" class="envio-detalhe-link-mapa" href="#" target="_blank" rel="noopener noreferrer">Abrir rota no Google Maps</a>
+        </div>
+
+        <div class="envio-detalhe-footer">
+            <button class="btn-cancelar" type="button" onclick="fecharModalDetalheEnvio()">Fechar</button>
+            <button class="btn-salvar envio-detalhe-btn-excluir" type="button" onclick="excluirEnvioAtualNoModal()">Excluir</button>
+        </div>
+    </div>
+</div>
+
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
     <script>
       window.FLEXA_GOOGLE_MAPS_KEY = "AIzaSyDgO6wu3gbsZYIYb1KxGOpZGZIb2pM-YAk";
+      window.FLEXA_MP_PUBLIC_KEY = "TEST-7a40c419-af65-4319-936d-47e6f6e422e2";
+      window.FLEXA_MP_ACCESS_TOKEN = "TEST-2697640432267445-061309-cc681e1bce52b21e4cd7fe12bc950d23-454485523";
     </script>
     <script src="app.js"></script>
 </body>
