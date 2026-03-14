@@ -824,14 +824,40 @@ function ativarMenuInferior(targetTela) {
 
     nav.querySelectorAll('.nav-item').forEach((item) => item.classList.remove('active'));
     const ativo = nav.querySelector(`.nav-item[data-nav-target="${targetTela}"]`);
-    if (ativo) ativo.classList.add('active');
+    if (ativo) {
+        ativo.classList.add('active');
+        animarAtivacaoItemMenu(ativo);
+    }
 
+    atualizarEstadoBotaoCentralMenu(targetTela);
     requestAnimationFrame(atualizarIndicadorMenuInferior);
 }
-
 function ativarAbaChat() {
     ativarMenuInferior('view-chat');
     alert('Chat em breve');
+}
+function animarAtivacaoItemMenu(item) {
+    if (!item) return;
+    item.classList.remove('nav-just-activated');
+    // força reflow para reiniciar a animação em trocas rápidas
+    void item.offsetWidth;
+    item.classList.add('nav-just-activated');
+    setTimeout(() => item.classList.remove('nav-just-activated'), 280);
+}
+
+function atualizarEstadoBotaoCentralMenu(idTela) {
+    const plusBtn = document.querySelector('.nav-center-plus');
+    if (!plusBtn) return;
+
+    const ativo = idTela === 'view-novo-envio';
+    plusBtn.classList.toggle('is-active', ativo);
+
+    if (ativo) {
+        plusBtn.classList.remove('nav-just-activated');
+        void plusBtn.offsetWidth;
+        plusBtn.classList.add('nav-just-activated');
+        setTimeout(() => plusBtn.classList.remove('nav-just-activated'), 280);
+    }
 }
 
 window.addEventListener('resize', () => {
@@ -880,7 +906,6 @@ function navegar(idTela) {
     if (nav) {
         nav.style.display = telasComMenu.includes(idTela) ? 'flex' : 'none';
     }
-
     document.querySelectorAll('.nav-item').forEach(item => item.classList.remove('active'));
 
     const menuMap = {
@@ -892,8 +917,13 @@ function navegar(idTela) {
 
     if (menuMap[idTela]) {
         const activeItem = document.querySelector(`.nav-item:nth-child(${menuMap[idTela]})`);
-        if (activeItem) activeItem.classList.add('active');
+        if (activeItem) {
+            activeItem.classList.add('active');
+            animarAtivacaoItemMenu(activeItem);
+        }
     }
+
+    atualizarEstadoBotaoCentralMenu(idTela);
 
     window.scrollTo(0, 0);
     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -1057,7 +1087,8 @@ let resumoRevisaoAtual = {
     veiculo: 'Moto',
     valorConteudo: null,
     descricao: '',
-    observacoes: ''
+    observacoes: '',
+    freteTesteOverride: null
 };
 
 
@@ -1105,10 +1136,36 @@ function precoParaMoeda(preco) {
     return 'R$ ' + numero.toFixed(2).replace('.', ',');
 }
 
+function obterFreteTesteDasObservacoes(texto = '') {
+    const t = (texto || '').toString();
+    const match = t.match(/TESTE_FRETE\s*=\s*([0-9]+(?:[\.,][0-9]{1,2})?)/i);
+    if (!match) return null;
+    const valor = parseMoedaParaNumero(match[1]);
+    if (!Number.isFinite(valor) || valor <= 0) return null;
+    return Number(valor.toFixed(2));
+}
+
+function aplicarFreteTesteSeConfigurado(totalCalculado) {
+    const obsAtual = (document.getElementById('input-obs-envio')?.value || resumoRevisaoAtual.observacoes || '').trim();
+    const override = obterFreteTesteDasObservacoes(obsAtual);
+    if (!Number.isFinite(override)) {
+        resumoRevisaoAtual.freteTesteOverride = null;
+        return Number(totalCalculado.toFixed(2));
+    }
+    resumoRevisaoAtual.freteTesteOverride = override;
+    return override;
+}
+
 const GOOGLE_MAPS_KEY = (window.FLEXA_GOOGLE_MAPS_KEY || '').trim();
 const MERCADO_PAGO_ACCESS_TOKEN = (window.FLEXA_MP_ACCESS_TOKEN || '').trim();
 const MERCADO_PAGO_PUBLIC_KEY = (window.FLEXA_MP_PUBLIC_KEY || '').trim();
 const MERCADO_PAGO_API_BASE = 'https://api.mercadopago.com';
+const MERCADO_PAGO_AMBIENTE = MERCADO_PAGO_ACCESS_TOKEN.startsWith('TEST-') ? 'teste' : 'producao';
+let rotaPixCodigoRawAtual = '';
+
+function normalizarCodigoPix(codigo = '') {
+    return (codigo || '').toString().replace(/\s+/g, '').trim();
+}
 
 function gerarIdempotencyKey() {
     if (window.crypto && typeof window.crypto.randomUUID === 'function') {
@@ -1159,6 +1216,26 @@ function setTicketPagamentoPixRota(url = '') {
     }
 }
 
+
+function atualizarAvisoAmbientePix() {
+    const aviso = document.getElementById('rota-pix-ambiente');
+    if (!aviso) return;
+
+    if (!MERCADO_PAGO_ACCESS_TOKEN) {
+        aviso.className = 'rota-pix-env rota-pix-env-warning';
+        aviso.innerText = 'Token do Mercado Pago não configurado.';
+        return;
+    }
+
+    if (MERCADO_PAGO_AMBIENTE === 'teste') {
+        aviso.className = 'rota-pix-env rota-pix-env-warning';
+        aviso.innerText = 'Ambiente TESTE: alguns bancos podem recusar o Pix. Para pagamento real, use credencial PROD.';
+        return;
+    }
+
+    aviso.className = 'rota-pix-env rota-pix-env-ok';
+    aviso.innerText = 'Ambiente PRODUÇÃO ativo para cobrança Pix.';
+}
 function formatarEnderecoEstruturado(end) {
     if (!end) return '';
     const ruaNum = [end.rua, end.num].filter(Boolean).join(', ');
@@ -1542,7 +1619,8 @@ async function estimarRotaEntrega(origemEndereco, destinoEndereco, origemGeo = n
 function atualizarPrecoEstimadoAtual() {
     const servico = getServicoSelecionadoAtual();
     const distanciaKm = Number.isFinite(resumoRevisaoAtual.distanciaKm) ? resumoRevisaoAtual.distanciaKm : 0;
-    const total = calcularFreteEstimado({ servico, veiculo: veiculoSelecionado, distanciaKm });
+    const totalCalculado = calcularFreteEstimado({ servico, veiculo: veiculoSelecionado, distanciaKm });
+    const total = aplicarFreteTesteSeConfigurado(totalCalculado);
     resumoRevisaoAtual.servico = servico;
     resumoRevisaoAtual.veiculo = veiculoSelecionado;
     resumoRevisaoAtual.totalFrete = total;
@@ -1633,7 +1711,8 @@ async function irParaRevisao() {
     const enderecoDestino = (resumoRevisaoAtual.destino || enderecoDestinoExibicao || '').trim();
     const distanciaKm = Number.isFinite(resumoRevisaoAtual.distanciaKm) ? resumoRevisaoAtual.distanciaKm : null;
     const duracaoMin = Number.isFinite(resumoRevisaoAtual.duracaoMin) ? resumoRevisaoAtual.duracaoMin : null;
-    const totalFrete = calcularFreteEstimado({ servico, veiculo: veiculoSelecionado, distanciaKm: Number.isFinite(distanciaKm) ? distanciaKm : 0 });
+    const totalFreteCalculado = calcularFreteEstimado({ servico, veiculo: veiculoSelecionado, distanciaKm: Number.isFinite(distanciaKm) ? distanciaKm : 0 });
+    const totalFrete = aplicarFreteTesteSeConfigurado(totalFreteCalculado);
     resumoRevisaoAtual = {
         origem: enderecoOrigem,
         destino: enderecoDestino,
@@ -1643,7 +1722,10 @@ async function irParaRevisao() {
         duracaoMin,
         totalFrete,
         servico,
-        veiculo: veiculoSelecionado
+        veiculo: veiculoSelecionado,
+        descricao: resumoRevisaoAtual.descricao || '',
+        observacoes: (document.getElementById('input-obs-envio')?.value || resumoRevisaoAtual.observacoes || '').trim(),
+        freteTesteOverride: resumoRevisaoAtual.freteTesteOverride || null
     };
     document.getElementById('rev-nome').innerText = nome;
     document.getElementById('rev-end').innerText = enderecoDestinoExibicao;
@@ -2551,12 +2633,6 @@ function renderEtapaModalRota() {
     }
 }
 
-function gerarPixPayloadRota() {
-    if (!rotaDraftAtual) return '';
-    const randomPart = Math.random().toString(36).slice(2, 12).toUpperCase();
-    return 'PIX-FLEXA-ROTA-' + rotaDraftAtual.id + '-' + Date.now() + '-' + randomPart + '|TOTAL:' + rotaDraftAtual.totalFrete.toFixed(2);
-}
-
 async function criarPagamentoPixMercadoPago(rotaDraft) {
     if (!MERCADO_PAGO_ACCESS_TOKEN) {
         throw new Error('Token do Mercado Pago não configurado.');
@@ -2568,6 +2644,7 @@ async function criarPagamentoPixMercadoPago(rotaDraft) {
     }
 
     const { firstName, lastName } = obterNomeLojistaSeparado();
+    const expiracao = new Date(Date.now() + (30 * 60 * 1000)).toISOString();
     const body = {
         transaction_amount: Number(valor.toFixed(2)),
         description: 'Flexa Rota ' + rotaDraft.id + ' (' + rotaDraft.qtd + ' pacote(s))',
@@ -2577,6 +2654,7 @@ async function criarPagamentoPixMercadoPago(rotaDraft) {
             first_name: firstName,
             last_name: lastName
         },
+        date_of_expiration: expiracao,
         external_reference: rotaDraft.id,
         metadata: {
             modulo: 'rota',
@@ -2604,7 +2682,7 @@ async function criarPagamentoPixMercadoPago(rotaDraft) {
     }
 
     const tx = data?.point_of_interaction?.transaction_data || {};
-    const pixCode = (tx.qr_code || '').toString().trim();
+    const pixCode = normalizarCodigoPix(tx.qr_code || '');
     if (!pixCode) {
         throw new Error('Mercado Pago não retornou código Pix Copia e Cola.');
     }
@@ -2668,51 +2746,59 @@ async function irParaPagamentoRota() {
     const pixTotal = document.getElementById('rota-pix-total');
     const pixFeedback = document.getElementById('rota-pix-copy-feedback');
 
-    if (pixTxt) pixTxt.innerText = 'Gerando código Pix...';
+    rotaPixCodigoRawAtual = '';
+    if (pixTxt) pixTxt.textContent = 'Gerando código Pix...';
     if (pixQtd) pixQtd.innerText = String(rotaDraftAtual.qtd);
     if (pixTotal) pixTotal.innerText = precoParaMoeda(rotaDraftAtual.totalFrete);
     if (pixFeedback) pixFeedback.innerText = '';
     setTicketPagamentoPixRota('');
     setStatusPagamentoPixRota('Gerando cobrança Pix no Mercado Pago...', 'loading');
+    atualizarAvisoAmbientePix();
 
     rotaModalStep = 2;
     renderEtapaModalRota();
 
     try {
         const pixPagamento = await criarPagamentoPixMercadoPago(rotaDraftAtual);
-        rotaDraftAtual.pagamentoMercadoPago = pixPagamento;
+        const codigoPixLimpo = normalizarCodigoPix(pixPagamento.pixCode);
+        rotaDraftAtual.pagamentoMercadoPago = {
+            ...pixPagamento,
+            pixCode: codigoPixLimpo
+        };
+        rotaPixCodigoRawAtual = codigoPixLimpo;
 
-        if (pixTxt) pixTxt.innerText = pixPagamento.pixCode;
+        if (pixTxt) pixTxt.textContent = codigoPixLimpo;
         setTicketPagamentoPixRota(pixPagamento.ticketUrl || '');
-        setStatusPagamentoPixRota('Pix gerado com sucesso. Aguardando pagamento.', 'pending');
+        if (MERCADO_PAGO_AMBIENTE === 'teste') {
+            setStatusPagamentoPixRota('Pix de teste gerado. Em banco real ele pode ser recusado.', 'warning');
+        } else {
+            setStatusPagamentoPixRota('Pix gerado com sucesso. Aguardando pagamento.', 'pending');
+        }
         renderEtapaModalRota();
     } catch (erro) {
-        console.warn('Falha ao gerar Pix no Mercado Pago. Aplicando fallback de teste:', erro);
-        const codigoFallback = gerarPixPayloadRota();
-
-        rotaDraftAtual.pagamentoMercadoPago = {
-            provider: 'fallback',
-            paymentId: '',
-            status: 'pending',
-            statusDetail: 'fallback',
-            pixCode: codigoFallback,
-            ticketUrl: ''
-        };
-
-        if (pixTxt) pixTxt.innerText = codigoFallback;
+        console.warn('Falha ao gerar Pix no Mercado Pago:', erro);
+        rotaDraftAtual.pagamentoMercadoPago = null;
+        rotaPixCodigoRawAtual = '';
+        if (pixTxt) pixTxt.textContent = '--';
         setTicketPagamentoPixRota('');
-        setStatusPagamentoPixRota('Modo teste: código Pix simulado (Mercado Pago indisponível).', 'warning');
+        setStatusPagamentoPixRota('Falha ao gerar Pix. Confira token/permissões e tente novamente.', 'warning');
         renderEtapaModalRota();
+        alert('Não foi possível gerar o Pix agora. Verifique as credenciais do Mercado Pago.');
     }
 }
 
 async function copiarCodigoPixRota() {
     const pixTxt = document.getElementById('rota-pix-code');
     const feedback = document.getElementById('rota-pix-copy-feedback');
-    const codigo = (pixTxt?.innerText || '').trim();
+    const codigo = normalizarCodigoPix(rotaPixCodigoRawAtual || pixTxt?.textContent || '');
 
     if (!codigo || codigo === '--') {
         if (feedback) feedback.innerText = 'Código indisponível.';
+        return;
+    }
+
+    if (!codigo.startsWith('000201')) {
+        if (feedback) feedback.innerText = 'Código Pix inválido para pagamento em banco.';
         return;
     }
 
@@ -2744,7 +2830,11 @@ async function copiarCodigoPixRota() {
     }
 
     if (feedback) {
-        feedback.innerText = copiado ? 'Código Pix copiado.' : 'Não foi possível copiar automaticamente.';
+        if (copiado && MERCADO_PAGO_AMBIENTE === 'teste') {
+            feedback.innerText = 'Código Pix copiado (ambiente TESTE).';
+        } else {
+            feedback.innerText = copiado ? 'Código Pix copiado.' : 'Não foi possível copiar automaticamente.';
+        }
     }
 }
 
@@ -2856,12 +2946,14 @@ function iniciarModalRota() {
     const pixQtd = document.getElementById('rota-pix-qtd');
     const pixTotal = document.getElementById('rota-pix-total');
     const pixFeedback = document.getElementById('rota-pix-copy-feedback');
-    if (pixTxt) pixTxt.innerText = '--';
+    rotaPixCodigoRawAtual = '';
+    if (pixTxt) pixTxt.textContent = '--';
     if (pixQtd) pixQtd.innerText = '0';
     if (pixTotal) pixTotal.innerText = 'R$ 0,00';
     if (pixFeedback) pixFeedback.innerText = '';
     setTicketPagamentoPixRota('');
     setStatusPagamentoPixRota('Aguardando geração do código...', 'pending');
+    atualizarAvisoAmbientePix();
 
     renderListaPendentesRota();
     renderEtapaModalRota();
@@ -3665,6 +3757,12 @@ abrirNovoCliente = function abrirNovoClienteComSheet() {
 renderClientes = function renderClientesRedirect(filtro = '') {
     renderClientesSelector(filtro);
 };
+
+
+
+
+
+
 
 
 
