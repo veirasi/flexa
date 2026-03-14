@@ -20,6 +20,7 @@ let clienteEmEdicaoId = null;
 let clienteSelecionadoId = null;
 let editRevealTimeout = null;
 let cepLojaDebounceTimer = null;
+let cepClienteDebounceTimer = null;
 let ultimoCepLojaConsultado = '';
 let ultimoErroRota = null;
 let googleMapsLoaderPromise = null;
@@ -33,6 +34,8 @@ let rotaDetalhePacotes = [];
 let rotaDetalhePaginaAtual = 0;
 let rotaDetalheSwipeStartX = 0;
 let rotaDetalheSwipeEndX = 0;
+let rotaSwipeStartX = 0;
+let rotaSwipeCardAtivo = null;
 
 function getUsuarioIdAtual() {
     return usuarioLogado?.id || (firebase.auth().currentUser ? firebase.auth().currentUser.uid : null);
@@ -649,6 +652,52 @@ function confirmarEnvioFinal() {
 function abrirNovoCliente() {
     resetClienteForm();
     abrirModalNovoCliente();
+}
+
+async function buscarEndereco(opts = {}) {
+    const silencioso = Boolean(opts?.silencioso);
+    const cepInput = document.getElementById('new-cli-cep');
+    const ruaInput = document.getElementById('new-cli-rua');
+    if (!cepInput || !ruaInput) return null;
+
+    const cep = (cepInput.value || '').replace(/\D/g, '');
+    if (cep.length !== 8) {
+        if (!silencioso) alert('Digite um CEP válido com 8 números.');
+        return null;
+    }
+
+    const placeholderOriginal = ruaInput.placeholder;
+    ruaInput.placeholder = 'Buscando endereço...';
+
+    try {
+        const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
+        const dados = await res.json();
+        if (dados?.erro) {
+            if (!silencioso) alert('CEP não encontrado.');
+            return null;
+        }
+
+        document.getElementById('new-cli-rua').value = dados.logradouro || '';
+        document.getElementById('new-cli-bairro').value = dados.bairro || '';
+        document.getElementById('new-cli-cidade').value = dados.localidade || '';
+        document.getElementById('new-cli-estado').value = dados.uf || '';
+        document.getElementById('new-cli-num')?.focus();
+        return dados;
+    } catch (err) {
+        if (!silencioso) alert('Erro ao buscar CEP. Verifique sua conexão.');
+        return null;
+    } finally {
+        ruaInput.placeholder = placeholderOriginal || 'Ex: Av. Paulista';
+    }
+}
+
+function agendarBuscaCepCliente(valor) {
+    const cep = (valor || '').replace(/\D/g, '');
+    if (cepClienteDebounceTimer) clearTimeout(cepClienteDebounceTimer);
+    if (cep.length !== 8) return;
+    cepClienteDebounceTimer = setTimeout(() => {
+        buscarEndereco({ silencioso: true });
+    }, 260);
 }
 
 const telInput = document.getElementById('new-cli-tel');
@@ -2041,19 +2090,32 @@ async function renderRotasTelaPrincipal() {
         const cidadeLabel = resumo.extras > 0 ? `${resumo.principal} +${resumo.extras}` : resumo.principal;
 
         return `
-            <button type="button" class="rota-main-card" onclick="abrirModalDetalheRota('${String(rota.id).replace(/'/g, "\\'")}')">
-                <div class="rota-main-icon"><i data-lucide="package"></i></div>
-                <div class="rota-main-info">
-                    <div class="rota-main-top-row">
-                        <span class="rota-main-id">ID: ${rota.id}</span>
-                        <div class="rota-main-badges">
-                            <span class="rota-main-status ${status.className}">${status.label}</span>
-                        </div>
-                    </div>
-                    <div class="rota-main-city"><strong>${cidadeLabel}</strong></div>
-                    <div class="rota-main-meta">${qtd} pacote(s) • ${precoParaMoeda(total)}</div>
+            <div class="rota-swipe-wrap" id="rota-wrap-${rota.id}">
+                <div class="rota-swipe-actions">
+                    <button type="button" class="rota-swipe-btn btn-more" onclick="event.stopPropagation(); abrirModalDetalheRota('${String(rota.id).replace(/'/g, "\\'")}')">Mais</button>
+                    <button type="button" class="rota-swipe-btn btn-delete" onclick="event.stopPropagation(); confirmarExclusaoRota('${String(rota.id).replace(/'/g, "\\'")}')">Excluir</button>
                 </div>
-            </button>
+                <button type="button"
+                        class="rota-main-card rota-swipe-card"
+                        id="rota-card-${rota.id}"
+                        data-rota-id="${rota.id}"
+                        ontouchstart="handleRotaTouchStart(event)"
+                        ontouchmove="handleRotaTouchMove(event)"
+                        ontouchend="handleRotaTouchEnd(event)"
+                        onclick="handleRotaCardClick(event, '${String(rota.id).replace(/'/g, "\\'")}')">
+                    <div class="rota-main-icon"><i data-lucide="package"></i></div>
+                    <div class="rota-main-info">
+                        <div class="rota-main-top-row">
+                            <span class="rota-main-id">ID: ${rota.id}</span>
+                            <div class="rota-main-badges">
+                                <span class="rota-main-status ${status.className}">${status.label}</span>
+                            </div>
+                        </div>
+                        <div class="rota-main-city"><strong>${cidadeLabel}</strong></div>
+                        <div class="rota-main-meta">${qtd} pacote(s) • ${precoParaMoeda(total)}</div>
+                    </div>
+                </button>
+            </div>
         `;
     }).join('');
 
@@ -2065,6 +2127,126 @@ function verTodasAsRotas(event) {
     mostrarTodasRotasHome = !mostrarTodasRotasHome;
     renderRotasTelaPrincipal();
     return false;
+}
+
+function fecharSwipesRota(exceptId = null) {
+    document.querySelectorAll('.rota-swipe-card').forEach((card) => {
+        if (exceptId && card.id === exceptId) return;
+        card.style.transform = 'translateX(0)';
+        card.dataset.swipeOpen = '0';
+    });
+}
+
+function handleRotaTouchStart(event) {
+    rotaSwipeStartX = event.touches[0].clientX;
+    rotaSwipeCardAtivo = event.currentTarget;
+    if (!rotaSwipeCardAtivo) return;
+    rotaSwipeCardAtivo.style.transition = 'none';
+    rotaSwipeCardAtivo.dataset.cancelClick = '0';
+    fecharSwipesRota(rotaSwipeCardAtivo.id);
+}
+
+function handleRotaTouchMove(event) {
+    if (!rotaSwipeCardAtivo) return;
+    const touchX = event.touches[0].clientX;
+    const diff = touchX - rotaSwipeStartX;
+    if (Math.abs(diff) > 8) rotaSwipeCardAtivo.dataset.cancelClick = '1';
+    if (diff < 0) {
+        const limite = Math.max(diff, -156);
+        rotaSwipeCardAtivo.style.transform = `translateX(${limite}px)`;
+    }
+}
+
+function handleRotaTouchEnd(event) {
+    if (!rotaSwipeCardAtivo) return;
+    const card = rotaSwipeCardAtivo;
+    const touchX = event.changedTouches[0].clientX;
+    const diff = touchX - rotaSwipeStartX;
+
+    card.style.transition = 'transform 0.22s ease';
+    if (diff < -60) {
+        card.style.transform = 'translateX(-156px)';
+        card.dataset.swipeOpen = '1';
+    } else {
+        card.style.transform = 'translateX(0)';
+        card.dataset.swipeOpen = '0';
+    }
+
+    setTimeout(() => {
+        card.style.transition = '';
+    }, 220);
+
+    rotaSwipeCardAtivo = null;
+}
+
+function handleRotaCardClick(event, rotaId) {
+    const card = event.currentTarget;
+    if (!card) return;
+
+    if (card.dataset.cancelClick === '1') {
+        card.dataset.cancelClick = '0';
+        return;
+    }
+
+    if (card.dataset.swipeOpen === '1') {
+        fecharSwipesRota();
+        return;
+    }
+
+    abrirModalDetalheRota(rotaId);
+}
+
+async function excluirRotaPorId(rotaId, opts = {}) {
+    const confirmar = opts?.confirmar !== false;
+    if (!rotaId) return;
+
+    const rota = rotasHomeCache.find((r) => String(r.id) === String(rotaId));
+    if (!rota) return;
+
+    if (confirmar && !window.confirm(`Deseja excluir a rota ${rota.id}?`)) return;
+
+    const pacoteIds = Array.isArray(rota.pacoteIds) ? rota.pacoteIds : (Array.isArray(rota.pacotes) ? rota.pacotes : []);
+
+    if (pacoteIds.length) {
+        clientes.forEach((cliente) => {
+            const historico = Array.isArray(cliente.historico) ? cliente.historico : [];
+            historico.forEach((h, idx) => {
+                const idAtual = h.id || ('envio-' + cliente.id + '-' + idx);
+                if (pacoteIds.includes(idAtual)) {
+                    h.id = idAtual;
+                    h.status = 'PENDENTE';
+                    delete h.rotaId;
+                    h.atualizadoEm = Date.now();
+                }
+            });
+            cliente.historico = historico;
+        });
+        await saveClientes();
+    }
+
+    const uid = getUsuarioIdAtual();
+    if (uid) {
+        await db.ref('usuarios/' + uid + '/rotas/' + rota.id).remove();
+    }
+
+    if (rotaDetalheAtual && String(rotaDetalheAtual.id) === String(rota.id)) {
+        fecharModalDetalheRota();
+        rotaDetalheAtual = null;
+        rotaDetalhePacotes = [];
+    }
+
+    fecharSwipesRota();
+    await renderRotasTelaPrincipal();
+    renderEnviosHome();
+}
+
+async function confirmarExclusaoRota(rotaId) {
+    await excluirRotaPorId(rotaId, { confirmar: true });
+}
+
+async function excluirRotaAtualComConfirmacao() {
+    if (!rotaDetalheAtual?.id) return;
+    await excluirRotaPorId(rotaDetalheAtual.id, { confirmar: true });
 }
 
 function atualizarResumoModalDetalheRota() {
