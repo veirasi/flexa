@@ -3580,15 +3580,19 @@
 }
 /* ===== Home title weight correction ===== */
 .home-quick-title {
-    font-size: 17px !important;
-    line-height: 1.04 !important;
-    font-weight: 500 !important;
-    max-width: 54% !important;
+    font-size: 21px !important;
+    line-height: 1.02 !important;
+    font-weight: 600 !important;
+    max-width: 46% !important;
+    white-space: normal !important;
+    word-break: keep-all;
+    letter-spacing: -0.2px;
 }
 
 @media (max-width: 390px) {
     .home-quick-title {
-        font-size: 16px !important;
+        font-size: 20px !important;
+        max-width: 48% !important;
     }
 }
 /* ===================== Chat (Lojista x Entregador) ===================== */
