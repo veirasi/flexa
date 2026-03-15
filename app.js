@@ -36,6 +36,9 @@ let rotaDetalheSwipeStartX = 0;
 let rotaDetalheSwipeEndX = 0;
 let rotaSwipeStartX = 0;
 let rotaSwipeCardAtivo = null;
+let filtroEnviosAtivo = 'TODOS';
+let filtroRotasAtivo = 'BUSCANDO';
+let dashboardRotasSincronizadas = false;
 
 function getUsuarioIdAtual() {
     return usuarioLogado?.id || (firebase.auth().currentUser ? firebase.auth().currentUser.uid : null);
@@ -901,7 +904,13 @@ function navegar(idTela) {
         if (typeof initClienteSearch === 'function') initClienteSearch();
         if (typeof initClientes === 'function') initClientes();
     }
+
+    if (idTela === 'view-dash-loja') {
+        renderizarDashboard(window.usuarioLogado || {});
+    }
+
     if (idTela === 'view-rotas') {
+        if (typeof atualizarLocalColetaDinamico === 'function') atualizarLocalColetaDinamico();
         if (typeof renderRotasTelaPrincipal === 'function') renderRotasTelaPrincipal();
     }
 
@@ -1268,6 +1277,38 @@ function formatarEnderecoClienteParaRota(cliente, fallbackEndereco = '') {
 
 function obterEnderecoLojaTexto() {
     return formatarEnderecoEstruturado(window.usuarioLogado?.endereco);
+}
+
+function obterCidadeUfUsuarioLogado() {
+    const end = window.usuarioLogado?.endereco || {};
+    const cidade = (end.cidade || '').toString().trim();
+    const uf = normalizarUf(end.uf || end.estado || '');
+
+    if (cidade && uf) return `${cidade}, ${uf}`;
+    if (cidade) return cidade;
+
+    const textoEndereco = formatarEnderecoEstruturado(end);
+    if (textoEndereco.includes('/')) {
+        const pos = textoEndereco.lastIndexOf('-');
+        const cidadeUf = pos >= 0 ? textoEndereco.slice(pos + 1).trim() : textoEndereco;
+        const [cidadeTxt, ufTxt] = cidadeUf.split('/');
+        if (cidadeTxt && ufTxt) return `${cidadeTxt.trim()}, ${normalizarUf(ufTxt)}`;
+    }
+
+    return '';
+}
+
+async function atualizarLocalColetaDinamico() {
+    const el = document.getElementById('local-coleta-cidade-uf');
+    if (!el) return;
+
+    let cidadeUf = obterCidadeUfUsuarioLogado();
+    if (!cidadeUf) {
+        await obterEnderecoLojaAtual();
+        cidadeUf = obterCidadeUfUsuarioLogado();
+    }
+
+    el.textContent = cidadeUf || 'Defina endereco';
 }
 
 async function obterEnderecoLojaAtual() {
@@ -1887,7 +1928,9 @@ firebase.auth().onAuthStateChanged((user) => {
                 const userData = snapshot.val();
                 if (userData) {
                     window.usuarioLogado = { id: user.uid, ...userData };
+                    dashboardRotasSincronizadas = false;
                     renderizarDashboard(userData);
+                    atualizarLocalColetaDinamico();
                     navegar('view-dash-loja');
                     if (tabbar) tabbar.style.display = 'flex';
                     initClientes();
@@ -1896,6 +1939,8 @@ firebase.auth().onAuthStateChanged((user) => {
             }).catch(() => finalizarSplash(splash));
     } else {
         // Usuário Deslogado
+        dashboardRotasSincronizadas = false;
+        rotasHomeCache = [];
         navegar('view-inicio');
         if (tabbar) tabbar.style.display = 'none';
         initClientes();
@@ -1977,47 +2022,188 @@ function uploadLogo(input) {
 }
 
 function renderizarDashboard(user) {
-    // 1. Define o container onde o conteúdo será injetado
     const container = document.getElementById('dash-loader-content');
     if (!container) return;
 
-    // 2. Define a foto (Prioriza 'foto', depois 'logo', e por fim o placeholder)
-    const fotoUrl = user.foto || user.logo || 'https://images.unsplash.com/photo-1535713875002-d1d0cf377fde?w=100';
-    
+    const localColeta = obterCidadeUfUsuarioLogado() || 'Defina o endereco';
 
-    // 4. Monta o HTML dinâmico
-    container.innerHTML = `
-        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 25px;">
-            <img src="${fotoUrl}" style="width: 45px; height: 45px; border-radius: 50%; object-fit: cover; border: 2px solid var(--brand-orange);">
-            <div>
-                <p style="color: var(--text-sub); font-size: 12px; margin: 0;">Bem-vindo,</p>
-                <h2 style="font-size: 20px; font-weight: 800; margin: 0;">${user.nome || 'Usuário'}! </h2>
+    const envios = typeof coletarEnviosDaBase === 'function' ? coletarEnviosDaBase() : [];
+    const recentes = envios.slice(0, 4);
+
+    const rotas = Array.isArray(rotasHomeCache) ? rotasHomeCache : [];
+    const rotaAtual = rotas.find((r) => {
+        const st = normalizarStatusRotaFiltro(r?.status || r?.pagamentoStatus || 'CRIADA');
+        return st === 'EM_ROTA' || st === 'BUSCANDO';
+    }) || rotas[0] || null;
+
+    let pacoteAtual = null;
+    let distanciaTotal = 0;
+    let duracaoTotal = 0;
+    let cidadeDestino = '--';
+    let statusRotaVisual = getStatusVisualRota('CRIADA');
+    let etapaAtual = 1;
+
+    if (rotaAtual) {
+        const pacotes = getPacotesDaRota(rotaAtual);
+        pacoteAtual = pacotes[0] || null;
+        distanciaTotal = pacotes.reduce((acc, p) => acc + (Number.isFinite(Number(p?.distanciaKm)) ? Number(p.distanciaKm) : 0), 0);
+        duracaoTotal = pacotes.reduce((acc, p) => acc + (Number.isFinite(Number(p?.duracaoMin)) ? Number(p.duracaoMin) : 0), 0);
+
+        const resumoCidades = resumirCidadesRota(pacotes);
+        cidadeDestino = resumoCidades?.principal || '--';
+
+        const statusNorm = normalizarStatusRotaFiltro(rotaAtual?.status || rotaAtual?.pagamentoStatus || 'CRIADA');
+        statusRotaVisual = getStatusVisualRota(statusNorm);
+        etapaAtual = statusNorm === 'CONCLUIDO' ? 4 : statusNorm === 'EM_ROTA' ? 3 : statusNorm === 'BUSCANDO' ? 2 : 1;
+    }
+
+    const statusTagHome = statusRotaVisual.label === 'BUSCANDO'
+        ? 'Buscando'
+        : statusRotaVisual.label === 'EM ROTA'
+            ? 'Em rota'
+            : statusRotaVisual.label === 'CONCLUIDA'
+                ? 'Concluida'
+                : statusRotaVisual.label;
+
+    const timelineHtml = [1, 2, 3, 4].map((etapa) => {
+        const done = etapa <= etapaAtual;
+        const current = etapa === etapaAtual;
+        return `<span class="home-route-dot ${done ? 'done' : ''} ${current ? 'current' : ''}"></span>`;
+    }).join('');
+
+    const statusRecenteClass = (statusTxt) => {
+        const s = normalizarStatusEnvioFiltro(statusTxt);
+        if (s === 'CONCLUIDO') return 'home-recent-status-entregue';
+        if (s === 'EM_ROTA') return 'home-recent-status-processo';
+        if (s === 'CANCELADO') return 'home-recent-status-cancelado';
+        return 'home-recent-status-processo';
+    };
+
+    const listaRecentes = recentes.length
+        ? recentes.map((item) => {
+            const classeStatus = statusRecenteClass(item.statusRaw || item.status);
+            const nome = (item.destinatario || 'Cliente').toString();
+            return `
+                <button type="button" class="home-recent-item" onclick="navegar('view-novo-envio')">
+                    <span class="home-recent-avatar"><i data-lucide="package"></i></span>
+                    <span class="home-recent-main">
+                        <strong>Pedido #${item.codigo || '--'}</strong>
+                        <small>${nome}</small>
+                    </span>
+                    <span class="home-recent-status ${classeStatus}">${item.status || 'Pendente'}</span>
+                </button>
+            `;
+        }).join('')
+        : '<div class="home-empty-inline">Nenhum pacote recente ainda.</div>';
+
+    const cardEmRota = rotaAtual
+        ? `
+            <button type="button" class="home-current-card" onclick="abrirModalDetalheRota('${String(rotaAtual.id).replace(/'/g, "\\'")}')">
+                <div class="home-current-main">
+                    <div class="home-current-head">
+                        <span class="home-current-avatar"><i data-lucide="package"></i></span>
+                        <div class="home-current-title-wrap">
+                            <strong>ID: ${rotaAtual.id || '--'}</strong>
+                            <small>${formatarDistancia(distanciaTotal)} · ${formatarDuracao(duracaoTotal)}</small>
+                        </div>
+                        <span class="home-current-badge home-current-status-tag ${statusRotaVisual.className}">${statusTagHome}</span>
+                    </div>
+
+                    <div class="home-current-timeline-wrap">
+                        <span class="home-current-time">${etapaAtual >= 4 ? 'Concluida' : (etapaAtual === 3 ? 'Em andamento' : 'Aguardando entregador')}</span>
+                        <div class="home-current-track">
+                            <div class="home-current-track-line"></div>
+                            <div class="home-current-dots">${timelineHtml}</div>
+                            <span class="home-current-bike"><img src="img/box2.png" alt="Em rota"></span>
+                        </div>
+                    </div>
+
+                    <div class="home-current-footer">
+                        <span><small>Origem</small><strong>${localColeta}</strong></span>
+                        <span><small>Destino</small><strong>${cidadeDestino}</strong></span>
+                    </div>
+                </div>
+
+                <img src="img/box2.png" alt="Pacote em rota" class="home-current-box-image">
+            </button>
+        `
+        : `
+            <div class="home-current-card home-current-empty-card">
+                <div class="home-empty-inline">Sem rota ativa no momento.</div>
+                <button type="button" class="home-inline-btn" onclick="navegar('view-rotas')">Criar rota</button>
             </div>
-        </div>
+        `;
 
-        <div class="promo-banner">
-            <h3>Está com pressa?</h3>
-            <p>Experimente o envio <b>Flash</b>.</p>
-        </div>
-        
-        <div class="grid-stats">
-            <div class="stat-card"><span>Entregas hoje</span><h4>0</h4></div>
-            <div class="stat-card"><span>Em trânsito</span><h4>0</h4></div>
-        </div>
+    container.innerHTML = `
+        <div class="home-screen">
+            <header class="home-brand-row">
+                <div class="home-logo">FLEX<span>A</span></div>
+                <button type="button" class="home-bell-btn" onclick="navegar('view-rotas')">
+                    <i data-lucide="bell"></i>
+                    <span class="home-bell-dot"></span>
+                </button>
+            </header>
 
-        <div class="filter-container">
-            <div style="background: var(--brand-orange)" class="chip active">Todas</div>
-            <div class="chip">Em rota</div>
-            <div class="chip">Pendentes</div>
-        </div>
+            <div class="home-location-strip">
+                <span class="home-truck-icon"><i data-lucide="truck"></i></span>
+                <div class="home-address-text">
+                    <small>Local de coleta</small>
+                    <strong>${localColeta}</strong>
+                </div>
+            </div>
 
-        <div id="lista-vazia-dash" style="text-align:center; padding:20px; color:var(--text-sub);">
-            <p>Nenhuma atividade recente.</p>
+            <div class="home-search-row">
+                <button type="button" class="home-search-pill" onclick="navegar('view-novo-envio')">
+                    <i data-lucide="search"></i>
+                    <span>Buscar cliente ou pedido</span>
+                </button>
+                <button type="button" class="home-search-action" onclick="abrirModalRastrearRotas()">
+                    <i data-lucide="scan-line"></i>
+                </button>
+            </div>
+
+            <div class="home-quick-grid">
+                <button type="button" class="home-quick-card" onclick="navegar('view-rotas')">
+                    <strong class="home-quick-title">Nova Rota</strong>
+                    <img src="img/moto.png" alt="Nova Rota" class="home-quick-image home-quick-image-moto">
+                </button>
+                <button type="button" class="home-quick-card" onclick="abrirSeletorCliente()">
+                    <strong class="home-quick-title">Novo Envio</strong>
+                    <img src="img/box1.png" alt="Novo Envio" class="home-quick-image home-quick-image-box">
+                </button>
+            </div>
+
+            <section class="home-section">
+                <div class="home-section-head">
+                    <h3>Em Rota</h3>
+                    <button type="button" onclick="navegar('view-rotas')">Ver todas</button>
+                </div>
+                ${cardEmRota}
+            </section>
+
+            <section class="home-section">
+                <div class="home-section-head">
+                    <h3>Entregas recentes</h3>
+                    <button type="button" onclick="navegar('view-novo-envio')">Ver todas</button>
+                </div>
+                <div class="home-recent-list">${listaRecentes}</div>
+            </section>
         </div>
     `;
-    
-    // 5. Renderiza os Ícones do Lucide
-    if(typeof lucide !== 'undefined') lucide.createIcons();
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+
+    if (!dashboardRotasSincronizadas && getUsuarioIdAtual()) {
+        dashboardRotasSincronizadas = true;
+        carregarRotasDoBanco()
+            .then((rotasDb) => {
+                rotasHomeCache = Array.isArray(rotasDb) ? rotasDb : [];
+                if (document.getElementById('view-dash-loja')?.classList.contains('active')) {
+                    renderizarDashboard(window.usuarioLogado || user || {});
+                }
+            })
+            .catch(() => {});
+    }
 }
 function buscarDadosDoBanco(uid) {
     // Usamos .on para que qualquer alteração no banco reflita no app em tempo real
@@ -2037,7 +2223,8 @@ function buscarDadosDoBanco(uid) {
             if (fotoDisplay) fotoDisplay.src = dados.foto || 'https://via.placeholder.com/110';
             
             // Renderiza o dash e navega (apenas na primeira carga)
-            renderizarDashboard(dados); 
+            renderizarDashboard(dados);
+            atualizarLocalColetaDinamico();
             // Se estiver na tela de login, manda para o dash
             if(document.getElementById('view-auth').classList.contains('active')) {
                 navegar('view-dash-loja');
@@ -2047,12 +2234,68 @@ function buscarDadosDoBanco(uid) {
         }
     });
 }
+function normalizarStatusRotaFiltro(status) {
+    const s = normalizarTexto((status || '').toString()).toUpperCase().replace(/\s+/g, '_');
+    if (!s) return 'BUSCANDO';
+    if (s === 'EM_ROTA') return 'EM_ROTA';
+    if (s === 'CONCLUIDO' || s === 'CONCLUIDA' || s === 'FINALIZADA' || s === 'FINALIZADO' || s === 'ENTREGUE') return 'CONCLUIDO';
+    if (s === 'CANCELADO' || s === 'CANCELADA') return 'CANCELADO';
+    if (s === 'CRIADA' || s === 'BUSCANDO' || s === 'PENDENTE') return 'BUSCANDO';
+    return 'BUSCANDO';
+}
+
 function getStatusVisualRota(status) {
-    const s = (status || '').toString().trim().toUpperCase();
+    const s = normalizarStatusRotaFiltro(status);
     if (s === 'EM_ROTA') return { label: 'EM ROTA', className: 'status-em-rota' };
-    if (s === 'FINALIZADA' || s === 'CONCLUIDA' || s === 'ENTREGUE') return { label: 'FINALIZADA', className: 'status-finalizada' };
-    if (s === 'CRIADA' || s === 'BUSCANDO') return { label: 'BUSCANDO', className: 'status-buscando' };
-    return { label: 'PENDENTE', className: 'status-pendente' };
+    if (s === 'CONCLUIDO') return { label: 'CONCLUIDA', className: 'status-finalizada' };
+    if (s === 'CANCELADO') return { label: 'CANCELADO', className: 'status-cancelado' };
+    return { label: 'BUSCANDO', className: 'status-buscando' };
+}
+
+function rotuloStatusEnvio(statusRaw) {
+    const s = normalizarTexto((statusRaw || '').toString()).toUpperCase().replace(/\s+/g, '_');
+    if (s === 'EM_ROTA') return 'Em rota';
+    if (s === 'ENTREGUE' || s === 'CONCLUIDO' || s === 'CONCLUIDA' || s === 'FINALIZADO' || s === 'FINALIZADA') return 'Concluido';
+    if (s === 'CANCELADO' || s === 'CANCELADA') return 'Cancelado';
+    return 'Pendente';
+}
+
+function normalizarStatusEnvioFiltro(statusRaw) {
+    const s = normalizarTexto((statusRaw || '').toString()).toUpperCase().replace(/\s+/g, '_');
+    if (s === 'EM_ROTA') return 'EM_ROTA';
+    if (s === 'ENTREGUE' || s === 'CONCLUIDO' || s === 'CONCLUIDA' || s === 'FINALIZADO' || s === 'FINALIZADA') return 'CONCLUIDO';
+    if (s === 'CANCELADO' || s === 'CANCELADA') return 'CANCELADO';
+    if (s === 'PAGAMENTO_PENDENTE') return 'PAGAMENTO_PENDENTE';
+    return 'PENDENTE';
+}
+
+function mapearCategoriaEnvio(envio) {
+    const statusBase = normalizarStatusEnvioFiltro(envio?.statusRaw || envio?.status || 'PENDENTE');
+    if (statusBase === 'EM_ROTA') return 'EM_ROTA';
+    if (statusBase === 'CONCLUIDO') return 'CONCLUIDO';
+    if (statusBase === 'CANCELADO') return 'CANCELADO';
+    if (statusBase === 'PAGAMENTO_PENDENTE') return 'PAGAMENTO_PENDENTE';
+
+    const pagamento = normalizarTexto(envio?.pagamentoStatusRaw || envio?.pagamentoStatus || envio?.pagamento || '')
+        .toUpperCase()
+        .replace(/\s+/g, '_');
+
+    if (pagamento === 'PENDENTE' || pagamento === 'PAGAMENTO_PENDENTE') {
+        return 'PAGAMENTO_PENDENTE';
+    }
+
+    return 'PACOTE_NOVO';
+}
+
+function envioPassaNoFiltro(envio) {
+    if (!filtroEnviosAtivo || filtroEnviosAtivo === 'TODOS') return true;
+    return mapearCategoriaEnvio(envio) === filtroEnviosAtivo;
+}
+
+function rotaPassaNoFiltro(rota) {
+    if (!filtroRotasAtivo || filtroRotasAtivo === 'TODOS') return true;
+    const status = normalizarStatusRotaFiltro(rota?.status || rota?.pagamentoStatus || 'CRIADA');
+    return status === filtroRotasAtivo;
 }
 
 function montarMapaEnviosPorId() {
@@ -2142,15 +2385,37 @@ async function renderRotasTelaPrincipal() {
     const rotas = await carregarRotasDoBanco();
     rotasHomeCache = rotas;
 
+    const filterRow = document.getElementById('rotas-filter-row');
+    if (filterRow) {
+        filterRow.querySelectorAll('[data-rota-filter]').forEach((btn) => {
+            const alvo = (btn.dataset.rotaFilter || '').toUpperCase();
+            btn.classList.toggle('active', alvo === filtroRotasAtivo);
+        });
+    }
+
     if (!rotas.length) {
-        container.innerHTML = '<div class="rota-main-empty">Você ainda não criou nenhuma rota.</div>';
+        container.innerHTML = '<div class="rota-main-empty">Voce ainda nao criou nenhuma rota.</div>';
         if (link) link.style.display = 'none';
         return;
     }
 
-    const lista = mostrarTodasRotasHome ? rotas : rotas.slice(0, 3);
+    const filtradas = rotas.filter((rota) => rotaPassaNoFiltro(rota));
+    if (!filtradas.length) {
+        const mapaLabel = {
+            BUSCANDO: 'buscando',
+            EM_ROTA: 'em rota',
+            CONCLUIDO: 'concluidas',
+            CANCELADO: 'canceladas'
+        };
+        const label = mapaLabel[filtroRotasAtivo] || 'selecionado';
+        container.innerHTML = `<div class="rota-main-empty">Nenhuma rota ${label} no momento.</div>`;
+        if (link) link.style.display = 'none';
+        return;
+    }
+
+    const lista = mostrarTodasRotasHome ? filtradas : filtradas.slice(0, 3);
     if (link) {
-        link.style.display = rotas.length > 3 ? 'inline-flex' : 'none';
+        link.style.display = filtradas.length > 3 ? 'inline-flex' : 'none';
         link.innerText = mostrarTodasRotasHome ? 'Ver menos' : 'Ver todas';
     }
 
@@ -2203,6 +2468,144 @@ function verTodasAsRotas(event) {
     renderRotasTelaPrincipal();
     return false;
 }
+
+function selecionarFiltroEnvios(filtro = 'TODOS', btn = null) {
+    filtroEnviosAtivo = (filtro || 'TODOS').toString().toUpperCase();
+    const row = document.getElementById('envio-filter-row');
+    if (row) {
+        row.querySelectorAll('[data-envio-filter]').forEach((chip) => {
+            const alvo = (chip.dataset.envioFilter || '').toUpperCase();
+            chip.classList.toggle('active', alvo === filtroEnviosAtivo);
+        });
+    }
+    if (btn && btn.classList) btn.classList.add('active');
+    renderEnviosHome();
+}
+
+function selecionarFiltroRotas(filtro = 'BUSCANDO', btn = null) {
+    filtroRotasAtivo = (filtro || 'BUSCANDO').toString().toUpperCase();
+    const row = document.getElementById('rotas-filter-row');
+    if (row) {
+        row.querySelectorAll('[data-rota-filter]').forEach((chip) => {
+            const alvo = (chip.dataset.rotaFilter || '').toUpperCase();
+            chip.classList.toggle('active', alvo === filtroRotasAtivo);
+        });
+    }
+    if (btn && btn.classList) btn.classList.add('active');
+    mostrarTodasRotasHome = false;
+    renderRotasTelaPrincipal();
+}
+
+function abrirNovaRotaPeloChip(btn) {
+    if (btn) {
+        btn.classList.add('is-pressed');
+        setTimeout(() => btn.classList.remove('is-pressed'), 180);
+    }
+    openModal();
+}
+
+function getEtapaRastreamento(statusNorm) {
+    if (statusNorm === 'CONCLUIDO') return 4;
+    if (statusNorm === 'EM_ROTA') return 3;
+    if (statusNorm === 'BUSCANDO') return 2;
+    if (statusNorm === 'CANCELADO') return 1;
+    return 1;
+}
+
+function montarTimelineRastreamento(statusNorm) {
+    const etapaAtual = getEtapaRastreamento(statusNorm);
+    return [1, 2, 3, 4].map((etapa) => {
+        const done = etapa <= etapaAtual;
+        const current = etapa === etapaAtual;
+        return `<span class="rastrear-dot ${done ? 'done' : ''} ${current ? 'current' : ''}"></span>`;
+    }).join('');
+}
+
+async function renderListaModalRastrearRotas() {
+    const list = document.getElementById('rastrear-rota-list');
+    if (!list) return;
+
+    list.innerHTML = '<div class="rastrear-empty">Carregando rotas...</div>';
+
+    let rotas = Array.isArray(rotasHomeCache) ? rotasHomeCache : [];
+    if (!rotas.length) {
+        rotas = await carregarRotasDoBanco();
+        rotasHomeCache = rotas;
+    }
+
+    if (!rotas.length) {
+        list.innerHTML = '<div class="rastrear-empty">Nenhuma rota criada ainda.</div>';
+        return;
+    }
+
+    const cards = rotas.map((rota) => {
+        const pacotes = getPacotesDaRota(rota);
+        const resumoCidade = resumirCidadesRota(pacotes);
+        const statusNorm = normalizarStatusRotaFiltro(rota?.status || rota?.pagamentoStatus || 'CRIADA');
+        const statusVisual = getStatusVisualRota(statusNorm);
+
+        const dist = pacotes.reduce((acc, p) => acc + (Number.isFinite(Number(p?.distanciaKm)) ? Number(p.distanciaKm) : 0), 0);
+        const dur = pacotes.reduce((acc, p) => acc + (Number.isFinite(Number(p?.duracaoMin)) ? Number(p.duracaoMin) : 0), 0);
+        const qtd = Number(rota?.quantidade || pacotes.length || 0);
+
+        const tempoHint = statusNorm === 'CONCLUIDO'
+            ? 'Rota concluida'
+            : statusNorm === 'EM_ROTA'
+                ? `${Math.max(1, Math.round((dur || 0) * 0.5))} min restantes`
+                : statusNorm === 'CANCELADO'
+                    ? 'Rota cancelada'
+                    : 'Aguardando entregador';
+
+        return `
+            <button type="button" class="rastrear-card" onclick="abrirModalDetalheRota('${String(rota.id).replace(/'/g, "\\'")}')">
+                <div class="rastrear-card-head">
+                    <strong>${rota.id}</strong>
+                    <span class="rota-main-status ${statusVisual.className}">${statusVisual.label}</span>
+                </div>
+                <div class="rastrear-card-meta">${qtd} pacote(s) • ${resumoCidade.principal || '--'} • ${precoParaMoeda(Number(rota?.totalFrete || 0))}</div>
+                <div class="rastrear-track-wrap">
+                    <span class="rastrear-track-time">${tempoHint}</span>
+                    <div class="rastrear-track-line"></div>
+                    <div class="rastrear-track-dots">${montarTimelineRastreamento(statusNorm)}</div>
+                    <span class="rastrear-track-bike"><i data-lucide="bike"></i></span>
+                </div>
+                <div class="rastrear-card-footer">
+                    <span>${formatarDistancia(dist)}</span>
+                    <span>${formatarDuracao(dur)}</span>
+                </div>
+            </button>
+        `;
+    }).join('');
+
+    list.innerHTML = cards;
+}
+
+function abrirModalRastrearRotas(btn = null) {
+    if (btn) {
+        btn.classList.add('is-pressed');
+        setTimeout(() => btn.classList.remove('is-pressed'), 180);
+    }
+
+    const overlay = document.getElementById('overlay-rastrear-rota');
+    if (!overlay) return;
+
+    overlay.style.display = 'flex';
+    requestAnimationFrame(() => overlay.classList.add('is-open'));
+
+    renderListaModalRastrearRotas().then(() => {
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    });
+}
+
+function fecharModalRastrearRotas() {
+    const overlay = document.getElementById('overlay-rastrear-rota');
+    if (!overlay) return;
+    overlay.classList.remove('is-open');
+    setTimeout(() => {
+        overlay.style.display = 'none';
+    }, 220);
+}
+
 
 function fecharSwipesRota(exceptId = null) {
     document.querySelectorAll('.rota-swipe-card').forEach((card) => {
@@ -3191,7 +3594,9 @@ async function salvarEndereco() {
             // Atualiza o objeto local para refletir as mudanças sem recarregar
             if (!window.usuarioLogado) window.usuarioLogado = {};
             window.usuarioLogado.endereco = endereco;
-            
+            atualizarLocalColetaDinamico();
+            renderizarDashboard(window.usuarioLogado || {});
+
             fecharModalEndereco();
             alert("Endereço atualizado com sucesso!");
         })
@@ -3475,6 +3880,13 @@ function coletarEnviosDaBase() {
     clientes.forEach((c) => {
         const historico = Array.isArray(c.historico) ? c.historico : [];
         historico.forEach((h, idx) => {
+            const statusRaw = (h.status || 'PENDENTE').toString().toUpperCase();
+            const pagamentoStatusRaw = (h.pagamentoStatus || h.pagamento || '').toString().toUpperCase();
+            const categoria = mapearCategoriaEnvio({ statusRaw, pagamentoStatusRaw });
+
+            let statusLabel = rotuloStatusEnvio(statusRaw);
+            if (categoria === 'PAGAMENTO_PENDENTE') statusLabel = 'Pagamento pendente';
+
             envios.push({
                 id: h.id || `envio-${c.id}-${idx}`,
                 codigo: h.id ? h.id.replace('envio-', '').slice(-4) : String(idx + 1).padStart(4, '0'),
@@ -3484,7 +3896,10 @@ function coletarEnviosDaBase() {
                 endereco: formatEnderecoDisplay(h.destinoEndereco || c.endereco || ''),
                 destinoCompleto: (h.destinoEndereco || montarEnderecoParaCalculo(c, c.endereco || '') || '').trim(),
                 origemCompleta: (h.origemEndereco || formatarEnderecoLojaParaCalculo(window.usuarioLogado?.endereco || {}) || obterEnderecoLojaTexto() || '').trim(),
-                status: (h.status || '').toUpperCase() === 'EM_ROTA' ? 'Em rota' : ((h.status || '').toUpperCase() === 'ENTREGUE' ? 'Entregue' : ((h.status || '').toUpperCase() === 'CANCELADO' ? 'Cancelado' : 'Pendente')),
+                status: statusLabel,
+                statusRaw,
+                categoria,
+                pagamentoStatusRaw,
                 valor: Number.isFinite(Number(h.valorFrete)) ? Number(h.valorFrete) : parseMoedaParaNumero(h.valor || 0),
                 valorConteudo: Number.isFinite(Number(h.valorConteudo)) ? Number(h.valorConteudo) : null,
                 servico: h.servico || 'Standard',
@@ -3510,7 +3925,17 @@ function renderEnviosHome() {
     const container = document.getElementById('envios-list');
     if (!container) return;
 
+    const row = document.getElementById('envio-filter-row');
+    if (row) {
+        row.querySelectorAll('[data-envio-filter]').forEach((chip) => {
+            const alvo = (chip.dataset.envioFilter || '').toUpperCase();
+            chip.classList.toggle('active', alvo === filtroEnviosAtivo);
+        });
+    }
+
     const envios = coletarEnviosDaBase();
+    const filtrados = envios.filter((envio) => envioPassaNoFiltro(envio));
+
     if (!envios.length) {
         container.innerHTML = `
             <div class="envios-empty">
@@ -3521,7 +3946,17 @@ function renderEnviosHome() {
         return;
     }
 
-    container.innerHTML = envios.map((envio) => {
+    if (!filtrados.length) {
+        container.innerHTML = `
+            <div class="envios-empty">
+                <h3>Nenhum pacote neste filtro</h3>
+                <button type="button" class="envios-empty-btn" onclick="selecionarFiltroEnvios('TODOS')">Ver todos</button>
+            </div>
+        `;
+        return;
+    }
+
+    container.innerHTML = filtrados.map((envio) => {
         const valor = Number(envio.valor || 0).toFixed(2).replace('.', ',');
         return `
             <div class="envio-swipe-container" id="envio-wrap-${envio.id}">
@@ -3732,6 +4167,8 @@ initClientes = async function initClientesNovaHome() {
     renderClientesSelector(document.getElementById('buscar-cliente')?.value || '');
     renderEnviosHome();
     renderRotasTelaPrincipal();
+    atualizarLocalColetaDinamico();
+    if (window.usuarioLogado) renderizarDashboard(window.usuarioLogado);
 };
 
 const _confirmarEnvioFinalOriginal = confirmarEnvioFinal;
@@ -3739,6 +4176,7 @@ confirmarEnvioFinal = function confirmarEnvioFinalNovaHome() {
     _confirmarEnvioFinalOriginal();
     renderEnviosHome();
     renderRotasTelaPrincipal();
+    if (window.usuarioLogado) renderizarDashboard(window.usuarioLogado);
 };
 
 const _abrirNovoClienteOriginal = abrirNovoCliente;
@@ -3761,3 +4199,785 @@ renderClientes = function renderClientesRedirect(filtro = '') {
 
 
 
+// ===================== [CHAT LOJISTA x ENTREGADOR] =====================
+let chatConversasCache = [];
+let chatAtualId = null;
+let chatMsgUnsubscribe = null;
+let chatImagemSelecionadaDataUrl = '';
+let chatImagemSelecionadaNome = '';
+
+function escapeHtmlChat(valor) {
+    return (valor || '')
+        .toString()
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
+function sanitizeFirebaseKey(valor) {
+    return String(valor || '')
+        .replace(/[.#$\[\]/]/g, '_')
+        .replace(/\s+/g, '_');
+}
+
+function normalizarRemetenteMensagem(remetente) {
+    const txt = normalizarTexto(remetente).toUpperCase();
+    if (txt === 'ENTREGADOR' || txt === 'MOTOBOY' || txt === 'COURIER') return 'ENTREGADOR';
+    return 'LOJISTA';
+}
+
+function pacoteAbertoParaChat(pacote) {
+    const status = normalizarStatusEnvioFiltro(pacote?.status || 'PENDENTE');
+    return status !== 'CONCLUIDO' && status !== 'CANCELADO';
+}
+
+function obterEntregadorDaRota(rota) {
+    const entregadorId =
+        rota?.entregadorId ||
+        rota?.driverId ||
+        rota?.courierId ||
+        rota?.aceitoPor ||
+        rota?.entregador?.id ||
+        '';
+
+    const entregadorNome =
+        rota?.entregadorNome ||
+        rota?.driverNome ||
+        rota?.courierNome ||
+        rota?.entregador?.nome ||
+        'Entregador';
+
+    const entregadorFoto =
+        rota?.entregadorFoto ||
+        rota?.driverFoto ||
+        rota?.courierFoto ||
+        rota?.entregador?.foto ||
+        '';
+
+    return {
+        id: String(entregadorId || ''),
+        nome: String(entregadorNome || 'Entregador'),
+        foto: String(entregadorFoto || '')
+    };
+}
+
+function rotaTemEntregadorAtivoParaChat(rota) {
+    const statusRota = normalizarStatusRotaFiltro(rota?.status || rota?.pagamentoStatus || 'CRIADA');
+    if (statusRota !== 'EM_ROTA') return false;
+    const entregador = obterEntregadorDaRota(rota);
+    return Boolean(entregador.id || entregador.nome);
+}
+
+function parseMensagensChatDoBanco(chatData) {
+    const mensagensObj = chatData?.mensagens || {};
+    const mensagens = Object.keys(mensagensObj).map((id) => ({ id, ...mensagensObj[id] }));
+    mensagens.sort((a, b) => Number(a?.criadoEm || 0) - Number(b?.criadoEm || 0));
+    return mensagens;
+}
+
+function obterUltimaMensagemResumo(chatData) {
+    const mensagens = parseMensagensChatDoBanco(chatData);
+    const ultima = mensagens[mensagens.length - 1];
+    if (!ultima) {
+        return {
+            texto: 'Sem mensagens ainda',
+            criadoEm: 0
+        };
+    }
+    const texto = (ultima?.texto || '').trim();
+    const possuiImagem = Boolean((ultima?.imagemDataUrl || ultima?.imagemUrl || '').trim());
+    if (!texto && possuiImagem) {
+        return { texto: '[imagem]', criadoEm: Number(ultima?.criadoEm || 0) };
+    }
+    return {
+        texto: texto || 'Mensagem',
+        criadoEm: Number(ultima?.criadoEm || 0)
+    };
+}
+
+function formatarHoraChat(ts) {
+    const data = Number(ts || 0);
+    if (!data) return '--:--';
+    return new Date(data).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function gerarIniciais(nome) {
+    const partes = String(nome || 'E').split(' ').filter(Boolean);
+    return partes.map((p) => p[0]).join('').slice(0, 2).toUpperCase() || 'E';
+}
+
+function renderListaChats() {
+    const listEl = document.getElementById('chat-list');
+    const countEl = document.getElementById('chat-active-count');
+    if (!listEl || !countEl) return;
+
+    countEl.innerText = `${chatConversasCache.length} ativo(s)`;
+
+    if (!chatConversasCache.length) {
+        listEl.innerHTML = `
+            <div class="chat-empty">
+                <h3>Nenhum chat ativo agora</h3>
+                <p>O chat abre quando um entregador aceita rota e ainda ha pacotes em aberto.</p>
+            </div>
+        `;
+        return;
+    }
+
+    listEl.innerHTML = chatConversasCache.map((c) => {
+        const foto = c.entregadorFoto
+            ? `<img src="${escapeHtmlChat(c.entregadorFoto)}" alt="${escapeHtmlChat(c.entregadorNome)}">`
+            : `<span>${escapeHtmlChat(gerarIniciais(c.entregadorNome))}</span>`;
+
+        return `
+            <button type="button" class="chat-list-item" onclick="abrirThreadChat('${escapeHtmlChat(c.chatId)}')">
+                <div class="chat-list-avatar">${foto}</div>
+                <div class="chat-list-content">
+                    <div class="chat-list-top">
+                        <strong>${escapeHtmlChat(c.entregadorNome)}</strong>
+                        <small>${formatarHoraChat(c.ultimaMensagemEm)}</small>
+                    </div>
+                    <div class="chat-list-mid">Rota ${escapeHtmlChat(c.rotaId)} • ${c.pacotesAbertos} pacote(s) em aberto</div>
+                    <div class="chat-list-last">${escapeHtmlChat(c.ultimaMensagemTexto || 'Sem mensagens')}</div>
+                </div>
+            </button>
+        `;
+    }).join('');
+}
+
+async function carregarChatsAtivos() {
+    const uid = getUsuarioIdAtual();
+    const listEl = document.getElementById('chat-list');
+    if (!uid || !listEl) return;
+
+    listEl.innerHTML = '<div class="chat-empty"><p>Carregando chats...</p></div>';
+
+    let rotas = Array.isArray(rotasHomeCache) ? rotasHomeCache : [];
+    if (!rotas.length) {
+        rotas = await carregarRotasDoBanco();
+        rotasHomeCache = rotas;
+    }
+
+    const snapChats = await db.ref(`usuarios/${uid}/chats`).once('value').catch(() => null);
+    const chatsData = snapChats?.val() || {};
+
+    const conversas = [];
+    rotas.forEach((rota) => {
+        if (!rotaTemEntregadorAtivoParaChat(rota)) return;
+
+        const pacotes = getPacotesDaRota(rota);
+        const abertos = pacotes.filter((p) => pacoteAbertoParaChat(p)).length;
+        if (abertos <= 0) return;
+
+        const entregador = obterEntregadorDaRota(rota);
+        const chatId = `rota_${sanitizeFirebaseKey(rota.id)}`;
+        const chatData = chatsData[chatId] || {};
+        const ultimaMsg = obterUltimaMensagemResumo(chatData);
+        const meta = chatData.meta || {};
+
+        conversas.push({
+            chatId,
+            rotaId: String(rota.id || ''),
+            entregadorId: entregador.id || '',
+            entregadorNome: meta.entregadorNome || entregador.nome || 'Entregador',
+            entregadorFoto: meta.entregadorFoto || entregador.foto || '',
+            pacotesAbertos: abertos,
+            ultimaMensagemTexto: ultimaMsg.texto,
+            ultimaMensagemEm: Number(meta.ultimaMensagemEm || ultimaMsg.criadoEm || rota.atualizadoEm || rota.criadoEm || 0),
+            atualizadoEm: Number(rota.atualizadoEm || rota.criadoEm || 0)
+        });
+    });
+
+    conversas.sort((a, b) => Number(b.ultimaMensagemEm || b.atualizadoEm || 0) - Number(a.ultimaMensagemEm || a.atualizadoEm || 0));
+    chatConversasCache = conversas;
+    renderListaChats();
+}
+
+function abrirPainelThreadChat() {
+    const listPanel = document.getElementById('chat-list-panel');
+    const threadPanel = document.getElementById('chat-thread-panel');
+    if (listPanel) listPanel.classList.add('hidden');
+    if (threadPanel) threadPanel.classList.remove('hidden');
+}
+
+function abrirPainelListaChat() {
+    const listPanel = document.getElementById('chat-list-panel');
+    const threadPanel = document.getElementById('chat-thread-panel');
+    if (threadPanel) threadPanel.classList.add('hidden');
+    if (listPanel) listPanel.classList.remove('hidden');
+}
+
+function limparPreviewImagemChat() {
+    chatImagemSelecionadaDataUrl = '';
+    chatImagemSelecionadaNome = '';
+    const preview = document.getElementById('chat-image-preview');
+    if (preview) {
+        preview.style.display = 'none';
+        preview.innerHTML = '';
+    }
+    const inputFile = document.getElementById('chat-input-image');
+    if (inputFile) inputFile.value = '';
+}
+
+function renderMensagensChat(mensagens = []) {
+    const box = document.getElementById('chat-messages');
+    if (!box) return;
+
+    if (!mensagens.length) {
+        box.innerHTML = '<div class="chat-empty"><p>Conversa iniciada. Envie a primeira mensagem.</p></div>';
+        return;
+    }
+
+    box.innerHTML = mensagens.map((msg) => {
+        const tipoRem = normalizarRemetenteMensagem(msg?.remetenteTipo || 'LOJISTA');
+        const classe = tipoRem === 'LOJISTA' ? 'from-lojista' : 'from-entregador';
+        const texto = (msg?.texto || '').trim();
+        const img = (msg?.imagemDataUrl || msg?.imagemUrl || '').trim();
+        const hora = formatarHoraChat(msg?.criadoEm);
+        const blocoTexto = texto ? `<p>${escapeHtmlChat(texto).replace(/\n/g, '<br>')}</p>` : '';
+        const blocoImagem = img ? `<img src="${escapeHtmlChat(img)}" alt="Imagem da mensagem">` : '';
+        return `
+            <div class="chat-msg ${classe}">
+                <div class="chat-bubble">
+                    ${blocoImagem}
+                    ${blocoTexto}
+                    <small>${hora}</small>
+                </div>
+            </div>
+        `;
+    }).join('');
+
+    box.scrollTop = box.scrollHeight;
+}
+
+function encerrarListenerMensagensChat() {
+    if (typeof chatMsgUnsubscribe === 'function') {
+        chatMsgUnsubscribe();
+    }
+    chatMsgUnsubscribe = null;
+}
+
+function iniciarListenerMensagensChat(chatId) {
+    const uid = getUsuarioIdAtual();
+    if (!uid || !chatId) return;
+
+    encerrarListenerMensagensChat();
+
+    const ref = db.ref(`usuarios/${uid}/chats/${chatId}/mensagens`).limitToLast(120);
+    const handler = (snap) => {
+        const data = snap.val() || {};
+        const mensagens = Object.keys(data).map((id) => ({ id, ...data[id] }));
+        mensagens.sort((a, b) => Number(a?.criadoEm || 0) - Number(b?.criadoEm || 0));
+        renderMensagensChat(mensagens);
+    };
+
+    ref.on('value', handler);
+    chatMsgUnsubscribe = () => ref.off('value', handler);
+}
+
+async function abrirThreadChat(chatId) {
+    const conversa = chatConversasCache.find((c) => c.chatId === chatId);
+    if (!conversa) return;
+
+    chatAtualId = chatId;
+    const title = document.getElementById('chat-thread-title');
+    const subtitle = document.getElementById('chat-thread-subtitle');
+    if (title) title.innerText = conversa.entregadorNome || 'Entregador';
+    if (subtitle) subtitle.innerText = `Rota ${conversa.rotaId} • ${conversa.pacotesAbertos} pacote(s) em aberto`;
+
+    abrirPainelThreadChat();
+    limparPreviewImagemChat();
+    renderMensagensChat([]);
+    iniciarListenerMensagensChat(chatId);
+}
+
+function voltarListaChats() {
+    encerrarListenerMensagensChat();
+    chatAtualId = null;
+    limparPreviewImagemChat();
+    abrirPainelListaChat();
+    carregarChatsAtivos();
+}
+
+function abrirSeletorImagemChat() {
+    const input = document.getElementById('chat-input-image');
+    if (input) input.click();
+}
+
+function selecionarImagemChat(event) {
+    const file = event?.target?.files?.[0];
+    if (!file) return;
+    if (!file.type.startsWith('image/')) {
+        alert('Selecione uma imagem valida.');
+        return;
+    }
+    if (file.size > (2 * 1024 * 1024)) {
+        alert('Imagem muito grande. Use ate 2MB.');
+        return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+        chatImagemSelecionadaDataUrl = String(reader.result || '');
+        chatImagemSelecionadaNome = file.name || 'imagem';
+        const preview = document.getElementById('chat-image-preview');
+        if (!preview) return;
+        preview.innerHTML = `
+            <div class="chat-preview-card">
+                <img src="${escapeHtmlChat(chatImagemSelecionadaDataUrl)}" alt="Preview">
+                <div class="chat-preview-meta">
+                    <span>${escapeHtmlChat(chatImagemSelecionadaNome)}</span>
+                    <button type="button" onclick="limparPreviewImagemChat()">Remover</button>
+                </div>
+            </div>
+        `;
+        preview.style.display = 'block';
+    };
+    reader.readAsDataURL(file);
+}
+
+async function chatEstaAtivo(conversa) {
+    if (!conversa?.rotaId) return false;
+    let rotas = Array.isArray(rotasHomeCache) ? rotasHomeCache : [];
+    if (!rotas.length) {
+        rotas = await carregarRotasDoBanco();
+        rotasHomeCache = rotas;
+    }
+    const rota = rotas.find((r) => String(r.id) === String(conversa.rotaId));
+    if (!rota) return false;
+    if (!rotaTemEntregadorAtivoParaChat(rota)) return false;
+    const pacotes = getPacotesDaRota(rota);
+    const abertos = pacotes.filter((p) => pacoteAbertoParaChat(p)).length;
+    return abertos > 0;
+}
+
+async function enviarMensagemChat() {
+    if (!chatAtualId) return;
+    const uid = getUsuarioIdAtual();
+    if (!uid) return;
+
+    const conversa = chatConversasCache.find((c) => c.chatId === chatAtualId);
+    if (!conversa) return;
+
+    const podeConversar = await chatEstaAtivo(conversa);
+    if (!podeConversar) {
+        alert('Este chat foi encerrado porque a rota nao possui mais pacotes em aberto.');
+        voltarListaChats();
+        return;
+    }
+
+    const input = document.getElementById('chat-input-text');
+    const texto = (input?.value || '').trim();
+    const imagemData = (chatImagemSelecionadaDataUrl || '').trim();
+    if (!texto && !imagemData) return;
+
+    const criadoEm = Date.now();
+    const msgId = `msg_${criadoEm}_${Math.random().toString(36).slice(2, 8)}`;
+    const payload = {
+        id: msgId,
+        texto,
+        imagemDataUrl: imagemData || '',
+        remetenteTipo: 'LOJISTA',
+        remetenteId: uid,
+        criadoEm
+    };
+
+    const chatRef = db.ref(`usuarios/${uid}/chats/${chatAtualId}`);
+    const metaRef = chatRef.child('meta');
+    const msgRef = chatRef.child(`mensagens/${msgId}`);
+
+    await msgRef.set(payload);
+    await metaRef.update({
+        rotaId: conversa.rotaId || '',
+        entregadorId: conversa.entregadorId || '',
+        entregadorNome: conversa.entregadorNome || 'Entregador',
+        entregadorFoto: conversa.entregadorFoto || '',
+        ultimaMensagemTexto: texto || '[imagem]',
+        ultimaMensagemEm: criadoEm,
+        atualizadoEm: criadoEm
+    });
+
+    if (input) input.value = '';
+    limparPreviewImagemChat();
+}
+
+ativarAbaChat = function ativarAbaChatReal() {
+    navegar('view-chat');
+};
+
+const _navegarOriginalComChat = navegar;
+navegar = function navegarComChat(idTela) {
+    _navegarOriginalComChat(idTela);
+
+    const nav = document.getElementById('main-nav');
+    if (nav) {
+        const telasComMenu = ['view-dash-loja', 'view-novo-envio', 'view-rotas', 'view-chat', 'view-perfil'];
+        const mostrarMenu = telasComMenu.includes(idTela);
+        nav.style.display = mostrarMenu ? 'flex' : 'none';
+        if (mostrarMenu) {
+            ativarMenuInferior(idTela);
+        }
+    }
+
+    if (idTela === 'view-chat') {
+        abrirPainelListaChat();
+        carregarChatsAtivos();
+    } else if (chatAtualId) {
+        encerrarListenerMensagensChat();
+        chatAtualId = null;
+        limparPreviewImagemChat();
+    }
+};
+
+// ===================== [PAGAMENTO + SUPORTE PERFIL] =====================
+let pagamentoPerfilCache = {
+    saldo: 0,
+    banco: {},
+    pix: {}
+};
+
+function caminhoFinanceiroUsuario() {
+    const uid = getUsuarioIdAtual();
+    return uid ? `usuarios/${uid}/financeiro` : null;
+}
+
+function formatarSaldoPagamento(valor) {
+    return precoParaMoeda(Number(valor || 0));
+}
+
+function atualizarSaldoPagamentoUI() {
+    const saldoEl = document.getElementById('pag-saldo');
+    if (saldoEl) saldoEl.innerText = formatarSaldoPagamento(pagamentoPerfilCache.saldo || 0);
+}
+
+function abrirModalSheetGenerico(modalId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    modal.style.display = 'flex';
+    requestAnimationFrame(() => modal.classList.add('is-open'));
+}
+
+function fecharModalSheetGenerico(modalId) {
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    modal.classList.remove('is-open');
+    setTimeout(() => {
+        modal.style.display = 'none';
+    }, 220);
+}
+
+async function carregarDadosPagamento() {
+    const path = caminhoFinanceiroUsuario();
+    if (!path) return;
+
+    try {
+        const snap = await db.ref(path).once('value');
+        const data = snap.val() || {};
+
+        pagamentoPerfilCache = {
+            saldo: Number(data?.saldo || 0),
+            banco: data?.banco || {},
+            pix: data?.pix || {}
+        };
+
+        const banco = pagamentoPerfilCache.banco || {};
+        const pix = pagamentoPerfilCache.pix || {};
+
+        const bankName = document.getElementById('pag-bank-name');
+        const agencia = document.getElementById('pag-bank-agencia');
+        const conta = document.getElementById('pag-bank-conta');
+        const titular = document.getElementById('pag-bank-titular');
+        const pixTipo = document.getElementById('pag-pix-tipo');
+        const pixChave = document.getElementById('pag-pix-chave');
+
+        if (bankName) bankName.value = banco.nome || '';
+        if (agencia) agencia.value = banco.agencia || '';
+        if (conta) conta.value = banco.conta || '';
+        if (titular) titular.value = banco.titular || '';
+        if (pixTipo) pixTipo.value = pix.tipo || '';
+        if (pixChave) pixChave.value = pix.chave || '';
+
+        atualizarSaldoPagamentoUI();
+    } catch (err) {
+        console.warn('Falha ao carregar dados de pagamento:', err);
+    }
+}
+
+function abrirPagamento() {
+    abrirModalSheetGenerico('modal-pagamento');
+    carregarDadosPagamento();
+}
+
+function fecharModalPagamento() {
+    fecharModalSheetGenerico('modal-pagamento');
+}
+
+function lerValorMonetarioInput(valor) {
+    return parseMoedaParaNumero((valor || '').toString().trim());
+}
+
+async function persistirFinanceiroUsuario(payload = {}) {
+    const path = caminhoFinanceiroUsuario();
+    if (!path) return false;
+    try {
+        await db.ref(path).update(payload);
+        return true;
+    } catch (err) {
+        console.warn('Erro ao persistir financeiro:', err);
+        return false;
+    }
+}
+
+async function salvarDadosPagamento() {
+    const banco = {
+        nome: (document.getElementById('pag-bank-name')?.value || '').trim(),
+        agencia: (document.getElementById('pag-bank-agencia')?.value || '').trim(),
+        conta: (document.getElementById('pag-bank-conta')?.value || '').trim(),
+        titular: (document.getElementById('pag-bank-titular')?.value || '').trim()
+    };
+
+    const pix = {
+        tipo: (document.getElementById('pag-pix-tipo')?.value || '').trim(),
+        chave: (document.getElementById('pag-pix-chave')?.value || '').trim()
+    };
+
+    pagamentoPerfilCache.banco = banco;
+    pagamentoPerfilCache.pix = pix;
+
+    const ok = await persistirFinanceiroUsuario({
+        banco,
+        pix,
+        saldo: Number(pagamentoPerfilCache.saldo || 0),
+        atualizadoEm: Date.now()
+    });
+
+    if (!ok) {
+        alert('Nao foi possivel salvar os dados de pagamento.');
+        return;
+    }
+
+    alert('Dados de pagamento salvos com sucesso.');
+    fecharModalPagamento();
+}
+
+async function registrarTransacaoFinanceira(tipo, valor, descricao = '') {
+    const path = caminhoFinanceiroUsuario();
+    if (!path) return;
+    try {
+        const ref = db.ref(path + '/transacoes').push();
+        await ref.set({
+            id: ref.key,
+            tipo,
+            valor: Number(valor || 0),
+            descricao,
+            criadoEm: Date.now()
+        });
+    } catch (err) {
+        console.warn('Falha ao registrar transacao financeira:', err);
+    }
+}
+
+async function comprarCredito(valor) {
+    const num = Number(valor || 0);
+    if (!Number.isFinite(num) || num <= 0) return;
+
+    pagamentoPerfilCache.saldo = Number((Number(pagamentoPerfilCache.saldo || 0) + num).toFixed(2));
+    atualizarSaldoPagamentoUI();
+
+    const ok = await persistirFinanceiroUsuario({
+        saldo: pagamentoPerfilCache.saldo,
+        atualizadoEm: Date.now()
+    });
+    if (!ok) {
+        alert('Nao foi possivel atualizar seu saldo agora.');
+        return;
+    }
+
+    await registrarTransacaoFinanceira('CREDITO', num, 'Recarga manual no app');
+}
+
+function comprarCreditoOutroValor() {
+    const valorTxt = window.prompt('Digite o valor da recarga (ex: 37,50):', '0,00');
+    if (valorTxt === null) return;
+    const valor = lerValorMonetarioInput(valorTxt);
+    if (!Number.isFinite(valor) || valor <= 0) {
+        alert('Digite um valor valido.');
+        return;
+    }
+    comprarCredito(valor);
+}
+
+async function enviarPixSimulado() {
+    const chaveDestino = (document.getElementById('pag-envio-chave')?.value || '').trim();
+    const valor = lerValorMonetarioInput(document.getElementById('pag-envio-valor')?.value || '0');
+
+    if (!chaveDestino) {
+        alert('Digite a chave Pix de destino.');
+        return;
+    }
+    if (!Number.isFinite(valor) || valor <= 0) {
+        alert('Digite um valor valido para envio.');
+        return;
+    }
+
+    const saldoAtual = Number(pagamentoPerfilCache.saldo || 0);
+    if (valor > saldoAtual) {
+        alert('Saldo insuficiente para este envio.');
+        return;
+    }
+
+    pagamentoPerfilCache.saldo = Number((saldoAtual - valor).toFixed(2));
+    atualizarSaldoPagamentoUI();
+
+    const ok = await persistirFinanceiroUsuario({
+        saldo: pagamentoPerfilCache.saldo,
+        atualizadoEm: Date.now()
+    });
+    if (!ok) {
+        alert('Nao foi possivel concluir o Pix agora.');
+        return;
+    }
+
+    await registrarTransacaoFinanceira('DEBITO', valor, `Pix enviado para ${chaveDestino}`);
+    const campoValor = document.getElementById('pag-envio-valor');
+    if (campoValor) campoValor.value = '';
+    alert('Pix enviado em modo simulacao.');
+}
+
+function abrirModalInfoPerfil(titulo, html) {
+    const titleEl = document.getElementById('info-perfil-title');
+    const bodyEl = document.getElementById('info-perfil-body');
+    if (titleEl) titleEl.innerText = titulo || 'Informacoes';
+    if (bodyEl) bodyEl.innerHTML = html || '';
+    abrirModalSheetGenerico('modal-info-perfil');
+}
+
+function fecharModalInfoPerfil() {
+    fecharModalSheetGenerico('modal-info-perfil');
+}
+
+function abrirAjuda() {
+    abrirModalInfoPerfil('Central de ajuda', `
+        <div class="info-card">
+            <h4>Perguntas frequentes</h4>
+            <ul>
+                <li><strong>Como criar envio?</strong> Va em Envio, toque no botao + e siga os passos.</li>
+                <li><strong>Como criar rota?</strong> Va em Rotas, toque em Nova Rota e selecione os pacotes pendentes.</li>
+                <li><strong>Pagamento nao confirmou?</strong> Revise o Pix e toque em verificar pagamento no fluxo da rota.</li>
+                <li><strong>Problema no mapa?</strong> Confira CEP, rua, numero, cidade e UF no perfil e no cliente.</li>
+            </ul>
+        </div>
+        <div class="info-card">
+            <h4>Atendimento</h4>
+            <p>Horario: segunda a sexta, 08h as 18h.</p>
+            <p>Tempo medio de resposta: ate 15 minutos em horario comercial.</p>
+        </div>
+    `);
+}
+
+function abrirFaleConosco() {
+    abrirModalInfoPerfil('Fale conosco', `
+        <div class="info-card">
+            <h4>Canais oficiais</h4>
+            <p><strong>WhatsApp suporte:</strong> <a href="https://wa.me/5585988000000" target="_blank" rel="noopener noreferrer">(85) 98800-0000</a></p>
+            <p><strong>E-mail:</strong> <a href="mailto:suporte@flexalog.com.br">suporte@flexalog.com.br</a></p>
+            <p><strong>Comercial:</strong> comercial@flexalog.com.br</p>
+        </div>
+        <div class="info-card">
+            <h4>Antes de chamar</h4>
+            <ul>
+                <li>Tenha em maos o ID da rota ou pedido.</li>
+                <li>Explique o problema e quando aconteceu.</li>
+                <li>Se puder, envie print para agilizar o suporte.</li>
+            </ul>
+        </div>
+    `);
+}
+
+function abrirSobre() {
+    abrirModalInfoPerfil('Sobre a Flexa Log', `
+        <div class="info-card">
+            <h4>Nossa proposta</h4>
+            <p>A Flexa Log conecta lojistas e entregadores para operacao de envios urbanos com foco em agilidade, transparencia e controle em tempo real.</p>
+            <p>O app permite criar envios, montar rotas, rastrear status e organizar pagamentos de forma simples no celular.</p>
+        </div>
+        <div class="info-card">
+            <h4>Versao do app</h4>
+            <p>Flexa Log • MVP validacao</p>
+            <p>Atualizacao: ${new Date().toLocaleDateString('pt-BR')}</p>
+        </div>
+    `);
+}
+
+function formatarDataExtrato(ts) {
+    const data = Number(ts || 0);
+    if (!data) return '--';
+    return new Date(data).toLocaleString('pt-BR', {
+        day: '2-digit',
+        month: '2-digit',
+        year: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+}
+
+function renderExtratoPagamento(transacoes = []) {
+    const list = document.getElementById('pag-extrato-list');
+    if (!list) return;
+
+    if (!Array.isArray(transacoes) || !transacoes.length) {
+        list.innerHTML = '<div class="pagamento-extrato-empty">Sem transacoes ainda.</div>';
+        return;
+    }
+
+    list.innerHTML = transacoes.map((item) => {
+        const tipo = String(item?.tipo || '').toUpperCase();
+        const isCredito = tipo === 'CREDITO';
+        const sinal = isCredito ? '+' : '-';
+        const valorClasse = isCredito ? 'credito' : 'debito';
+        const valorTxt = `${sinal} ${precoParaMoeda(Number(item?.valor || 0))}`;
+        const descricao = (item?.descricao || 'Movimentacao').toString();
+        return `
+            <div class="pagamento-extrato-item">
+                <div class="top">
+                    <span class="tipo">${isCredito ? 'Credito' : 'Debito'}</span>
+                    <span class="valor ${valorClasse}">${valorTxt}</span>
+                </div>
+                <div class="desc">${escapeHtmlChat(descricao)}</div>
+                <div class="data">${formatarDataExtrato(item?.criadoEm)}</div>
+            </div>
+        `;
+    }).join('');
+}
+
+async function carregarExtratoPagamento() {
+    const path = caminhoFinanceiroUsuario();
+    const list = document.getElementById('pag-extrato-list');
+    if (!path || !list) return;
+
+    list.innerHTML = '<div class="pagamento-extrato-empty">Carregando extrato...</div>';
+
+    try {
+        const snap = await db.ref(path + '/transacoes').limitToLast(40).once('value');
+        const data = snap.val() || {};
+        const arr = Object.keys(data).map((id) => ({ id, ...data[id] }));
+        arr.sort((a, b) => Number(b?.criadoEm || 0) - Number(a?.criadoEm || 0));
+        renderExtratoPagamento(arr);
+    } catch (err) {
+        console.warn('Falha ao carregar extrato:', err);
+        list.innerHTML = '<div class="pagamento-extrato-empty">Nao foi possivel carregar o extrato.</div>';
+    }
+}
+
+const _carregarDadosPagamentoOriginal = carregarDadosPagamento;
+carregarDadosPagamento = async function carregarDadosPagamentoComExtrato() {
+    await _carregarDadosPagamentoOriginal();
+    await carregarExtratoPagamento();
+};
+
+const _registrarTransacaoFinanceiraOriginal = registrarTransacaoFinanceira;
+registrarTransacaoFinanceira = async function registrarTransacaoFinanceiraComExtrato(tipo, valor, descricao = '') {
+    await _registrarTransacaoFinanceiraOriginal(tipo, valor, descricao);
+    await carregarExtratoPagamento();
+};

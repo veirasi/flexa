@@ -87,27 +87,10 @@
         </section>
 
         <section id="view-dash-loja" class="view">
-          <header class="header-dash">
-                <div class="logo">FLEX<span>A</span></div>
-                <div style="style="display: flex; justify-content: flex-end; padding: 10px 20px;">
-				<div class="notif-badge" style="width: 42px; height: 42px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.08); position: relative; cursor: pointer;">
-            <i data-lucide="bell" size="22" style="color: var(--text-main);"></i>
-            <div class="dot" style="width: 8px; height: 8px; background: var(--brand-orange); border-radius: 50%; position: absolute; top: 10px; right: 10px; border: 2px solid white;"></div>
-        </div>
-    </div>
-            </header>
-            <div id="dash-loader-content">
-                <h2 class="skeleton" style="font-size: 24px; font-weight: 800; margin-bottom: 25px; width: 80%;">Olá, Express Imports!</h2>
-                <div class="promo-banner skeleton" style="height: 120px;"></div>
-                <div class="grid-stats">
-                    <div class="stat-card skeleton" style="height: 90px;"></div>
-                    <div class="stat-card skeleton" style="height: 90px;"></div>
-                </div>
-                <div class="rota-card skeleton" style="height: 80px;"></div>
-            </div>
-        </section>
+    <div id="dash-loader-content"></div>
+</section>
 
-                <section id="view-novo-envio" class="view">
+<section id="view-novo-envio" class="view">
     <div class="envio-screen">
         <button class="envio-cta" type="button" onclick="abrirSeletorCliente()">
             <div>
@@ -117,10 +100,13 @@
             <span class="envio-cta-plus"><i data-lucide="plus" size="20"></i></span>
         </button>
 
-        <div class="envio-filter-row">
-            <button class="chip active" type="button">Todos</button>
-            <button class="chip" type="button">Pacote Novo</button>
-            <button class="chip" type="button">Pagamento Pendente</button>
+        <div class="envio-filter-row" id="envio-filter-row">
+            <button class="chip active" type="button" data-envio-filter="TODOS" onclick="selecionarFiltroEnvios('TODOS', this)">Todos</button>
+            <button class="chip" type="button" data-envio-filter="PACOTE_NOVO" onclick="selecionarFiltroEnvios('PACOTE_NOVO', this)">Pacote Novo</button>
+            <button class="chip" type="button" data-envio-filter="PAGAMENTO_PENDENTE" onclick="selecionarFiltroEnvios('PAGAMENTO_PENDENTE', this)">Pagamento Pendente</button>
+            <button class="chip" type="button" data-envio-filter="EM_ROTA" onclick="selecionarFiltroEnvios('EM_ROTA', this)">Em rota</button>
+            <button class="chip" type="button" data-envio-filter="CONCLUIDO" onclick="selecionarFiltroEnvios('CONCLUIDO', this)">Concluído</button>
+            <button class="chip" type="button" data-envio-filter="CANCELADO" onclick="selecionarFiltroEnvios('CANCELADO', this)">Cancelado</button>
         </div>
 
         <div id="envios-list" class="envios-list"></div>
@@ -232,7 +218,7 @@
         <div class="location-group">
             <span style="font-size: 11px; color: var(--text-sub); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Local de Coleta</span>
             <h2 style="font-size: 18px; color: var(--text-main); font-weight: 800; display: flex; align-items: center; gap: 5px;">
-                Maracanaú, CE <i data-lucide="chevron-down" size="18" style="color: var(--brand-orange)"></i>
+                <span id="local-coleta-cidade-uf">--</span> <i data-lucide="chevron-down" size="18" style="color: var(--brand-orange)"></i>
             </h2>
         </div>
         <div class="notif-badge" style="width: 45px; height: 45px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.05); position: relative;">
@@ -242,12 +228,13 @@
     </header>
 
     <div class="filter-container">
-        <div class="filter-scroll" style="display: flex; gap: 12px; overflow-x: auto;  padding-bottom: 5px; -webkit-overflow-scrolling: touch;">
-            <div style="background: var(--brand-orange);" class="chip active"><i data-lucide="plus-circle" size="16"></i> Nova Rota</div>
-            <div class="chip">Rastrear</div>
-            <div class="chip">Em Aberto</div>
-            <div class="chip">Finalizadas</div>
-            <div class="chip">Pendentes</div>
+        <div id="rotas-filter-row" class="filter-scroll rotas-filter-row" style="display: flex; gap: 12px; overflow-x: auto;  padding-bottom: 5px; -webkit-overflow-scrolling: touch;">
+            <button type="button" class="chip rota-chip-action" onclick="abrirNovaRotaPeloChip(this)"><i data-lucide="plus-circle" size="16"></i> Nova Rota</button>
+            <button type="button" class="chip rota-chip-action" onclick="abrirModalRastrearRotas(this)">Rastrear</button>
+            <button type="button" class="chip active" data-rota-filter="BUSCANDO" onclick="selecionarFiltroRotas('BUSCANDO', this)">Buscando</button>
+            <button type="button" class="chip" data-rota-filter="EM_ROTA" onclick="selecionarFiltroRotas('EM_ROTA', this)">Em rota</button>
+            <button type="button" class="chip" data-rota-filter="CONCLUIDO" onclick="selecionarFiltroRotas('CONCLUIDO', this)">Concluído</button>
+            <button type="button" class="chip" data-rota-filter="CANCELADO" onclick="selecionarFiltroRotas('CANCELADO', this)">Cancelado</button>
         </div>
     </div>
 
@@ -269,6 +256,40 @@
 
     <div id="rotas-main-list" class="rotas-main-list">
         <div class="rota-main-empty">Você ainda não criou nenhuma rota.</div>
+    </div>
+</section>
+
+<section id="view-chat" class="view">
+    <div class="chat-screen">
+        <div id="chat-list-panel" class="chat-list-panel">
+            <div class="chat-list-header">
+                <h2>Chats</h2>
+                <span id="chat-active-count">0 ativos</span>
+            </div>
+            <div id="chat-list" class="chat-list"></div>
+        </div>
+
+        <div id="chat-thread-panel" class="chat-thread-panel hidden">
+            <div class="chat-thread-header">
+                <button type="button" class="chat-back-btn" onclick="voltarListaChats()">
+                    <i data-lucide="arrow-left" size="18"></i>
+                </button>
+                <div class="chat-thread-user">
+                    <strong id="chat-thread-title">Conversa</strong>
+                    <small id="chat-thread-subtitle">--</small>
+                </div>
+            </div>
+
+            <div id="chat-image-preview" class="chat-image-preview" style="display:none;"></div>
+            <div id="chat-messages" class="chat-messages"></div>
+
+            <div class="chat-compose">
+                <input id="chat-input-text" type="text" placeholder="Mensagem" onkeydown="if(event.key==='Enter'){enviarMensagemChat();}">
+                <input id="chat-input-image" type="file" accept="image/*" style="display:none;" onchange="selecionarImagemChat(event)">
+                <button type="button" class="chat-compose-btn" onclick="abrirSeletorImagemChat()"><i data-lucide="image-plus" size="18"></i></button>
+                <button type="button" class="chat-compose-btn chat-compose-send" onclick="enviarMensagemChat()"><i data-lucide="send" size="18"></i></button>
+            </div>
+        </div>
     </div>
 </section>
 
@@ -365,11 +386,28 @@
                 <span id="rota-detalhe-page-info">0/0</span>
                 <button id="rota-detalhe-next" type="button" onclick="proximaPaginaDetalheRota()">Próximo</button>
             </div>
-            <button id="rota-detalhe-delete-btn" class="rota-detalhe-delete-btn" type="button" onclick="excluirRotaAtualComConfirmacao()">Excluir rota</button>
+            <div class="rota-detalhe-actions">
+                <button id="rota-detalhe-close-btn" class="rota-detalhe-close-btn" type="button" onclick="fecharModalDetalheRota()">Fechar</button>
+                <button id="rota-detalhe-delete-btn" class="rota-detalhe-delete-btn" type="button" onclick="excluirRotaAtualComConfirmacao()">Excluir</button>
+            </div>
         </div>
     </div>
 </div>
 
+
+<div id="overlay-rastrear-rota" class="modal-perfil-overlay" onclick="fecharModalRastrearRotas()" style="display:none;">
+    <div class="modal-perfil-sheet rastrear-sheet" onclick="event.stopPropagation()">
+        <div class="selector-sheet-handle"></div>
+        <div class="sheet-header-row rastrear-head-row">
+            <h2 class="selector-sheet-title">Rastreamento</h2>
+            <button type="button" class="selector-close-btn" onclick="fecharModalRastrearRotas()">×</button>
+        </div>
+        <div id="rastrear-rota-list" class="rastrear-list"></div>
+        <div class="sheet-step-footer">
+            <button class="btn-main" type="button" onclick="fecharModalRastrearRotas()">Fechar</button>
+        </div>
+    </div>
+</div>
 <nav id="main-nav" style="display: none;">
     <div id="nav-active-indicator" aria-hidden="true"></div>
 
@@ -499,6 +537,131 @@
     </div>
 </div>
 
+
+<div id="modal-pagamento" class="modal-perfil-overlay" onclick="fecharModalPagamento()">
+    <div class="modal-perfil-sheet pagamento-sheet" onclick="event.stopPropagation()">
+        <div class="sheet-header pagamento-sheet-header">
+            <div style="width: 40px; height: 4px; background: #e2e8f0; border-radius: 10px; margin: 0 auto 10px;"></div>
+            <div class="sheet-header-row">
+                <div style="width: 22px;"></div>
+                <h2 class="sheet-title" style="margin:0;">Pagamento</h2>
+                <button type="button" class="rota-flow-icon-btn" onclick="fecharModalPagamento()">×</button>
+            </div>
+        </div>
+
+        <div class="modal-perfil-body pagamento-body">
+            <div class="pagamento-saldo-card">
+                <span>Saldo disponivel</span>
+                <strong id="pag-saldo">R$ 0,00</strong>
+            </div>
+
+            <div class="pagamento-section">
+                <h4>Dados bancarios</h4>
+                <div class="form-group">
+                    <label>Banco</label>
+                    <div class="input-wrapper"><input type="text" id="pag-bank-name" placeholder="Ex: Banco do Brasil"></div>
+                </div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap: 12px;">
+                    <div class="form-group">
+                        <label>Agencia</label>
+                        <div class="input-wrapper"><input type="text" id="pag-bank-agencia" placeholder="0001"></div>
+                    </div>
+                    <div class="form-group">
+                        <label>Conta</label>
+                        <div class="input-wrapper"><input type="text" id="pag-bank-conta" placeholder="12345-6"></div>
+                    </div>
+                </div>
+                <div class="form-group">
+                    <label>Titular</label>
+                    <div class="input-wrapper"><input type="text" id="pag-bank-titular" placeholder="Nome do titular"></div>
+                </div>
+            </div>
+
+            <div class="pagamento-section">
+                <h4>Pix (receber e enviar)</h4>
+                <div style="display:grid; grid-template-columns: 1fr 1.3fr; gap: 12px;">
+                    <div class="form-group">
+                        <label>Tipo de chave</label>
+                        <div class="input-wrapper">
+                            <select id="pag-pix-tipo" class="pag-select">
+                                <option value="">Selecione</option>
+                                <option value="cpf">CPF</option>
+                                <option value="cnpj">CNPJ</option>
+                                <option value="email">E-mail</option>
+                                <option value="telefone">Telefone</option>
+                                <option value="aleatoria">Aleatoria</option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Chave Pix</label>
+                        <div class="input-wrapper"><input type="text" id="pag-pix-chave" placeholder="Digite sua chave"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="pagamento-section">
+                <h4>Comprar credito</h4>
+                <div class="pagamento-creditos-grid">
+                    <button type="button" onclick="comprarCredito(5)">R$ 5,00</button>
+                    <button type="button" onclick="comprarCredito(10)">R$ 10,00</button>
+                    <button type="button" onclick="comprarCredito(25)">R$ 25,00</button>
+                    <button type="button" onclick="comprarCredito(50)">R$ 50,00</button>
+                    <button type="button" onclick="comprarCredito(100)">R$ 100,00</button>
+                    <button type="button" class="btn-other" onclick="comprarCreditoOutroValor()">Outro valor</button>
+                </div>
+            </div>
+
+            <div class="pagamento-section">
+                <h4>Enviar Pix (simulacao)</h4>
+                <div class="form-group">
+                    <label>Chave destino</label>
+                    <div class="input-wrapper"><input type="text" id="pag-envio-chave" placeholder="Chave Pix do destinatario"></div>
+                </div>
+                <div class="form-group">
+                    <label>Valor</label>
+                    <div class="input-wrapper"><input type="text" id="pag-envio-valor" placeholder="0,00"></div>
+                </div>
+                <button type="button" class="btn-main" style="margin-top:0;" onclick="enviarPixSimulado()">Enviar Pix</button>
+                <p class="pagamento-hint">Modo teste: o valor sera debitado do saldo disponivel.</p>
+            </div>
+
+            <div class="pagamento-section">
+                <div class="pagamento-extrato-head">
+                    <h4>Extrato de transacoes</h4>
+                    <button type="button" onclick="carregarExtratoPagamento()">Atualizar</button>
+                </div>
+                <div id="pag-extrato-list" class="pagamento-extrato-list">
+                    <div class="pagamento-extrato-empty">Sem transacoes ainda.</div>
+                </div>
+            </div>
+        </div>
+
+        <div class="modal-footer-btns" style="margin-top:18px;">
+            <button class="btn-cancelar" onclick="fecharModalPagamento()">Cancelar</button>
+            <button class="btn-salvar" onclick="salvarDadosPagamento()">Salvar dados</button>
+        </div>
+    </div>
+</div>
+
+<div id="modal-info-perfil" class="modal-perfil-overlay" onclick="fecharModalInfoPerfil()">
+    <div class="modal-perfil-sheet info-sheet" onclick="event.stopPropagation()">
+        <div class="sheet-header info-sheet-header">
+            <div style="width: 40px; height: 4px; background: #e2e8f0; border-radius: 10px; margin: 0 auto 10px;"></div>
+            <div class="sheet-header-row">
+                <div style="width: 22px;"></div>
+                <h2 class="sheet-title" id="info-perfil-title" style="margin:0;">Informacoes</h2>
+                <button type="button" class="rota-flow-icon-btn" onclick="fecharModalInfoPerfil()">×</button>
+            </div>
+        </div>
+
+        <div id="info-perfil-body" class="modal-perfil-body info-body"></div>
+
+        <div class="modal-footer-btns" style="margin-top:18px;">
+            <button class="btn-salvar" style="flex:1;" onclick="fecharModalInfoPerfil()">Fechar</button>
+        </div>
+    </div>
+</div>
 <div id="modal-envio-detalhes" class="modal-perfil-overlay">
     <div class="modal-perfil-sheet" style="display: flex; flex-direction: column; max-height: 90vh;">
         <div class="sheet-header">
@@ -860,6 +1023,9 @@
     <script src="app.js"></script>
 </body>
 </html>
+
+
+
 
 
 
