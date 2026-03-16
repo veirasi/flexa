@@ -4165,3 +4165,362 @@
     text-align: center;
     padding: 10px 4px;
 }
+
+/* ===================== [PERFIL ENTREGADOR + PERMISSOES] ===================== */
+#view-perfil-entregador {
+    padding: 0 0 120px 0 !important;
+    background-color: transparent !important;
+}
+
+.perfil-header-entregador {
+    padding-top: 34px !important;
+}
+
+.perfil-entregador-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px 12px;
+    border-radius: 999px;
+    background: #fff4e8;
+    color: var(--brand-orange);
+    font-size: 11px;
+    font-weight: 800;
+    letter-spacing: 0.4px;
+    text-transform: uppercase;
+}
+
+.perfil-entregador-sub {
+    color: var(--text-sub);
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.menu-item-static {
+    cursor: default;
+}
+
+.menu-value {
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--text-main);
+}
+
+body.usuario-entregador #main-nav .nav-center-plus {
+    display: none !important;
+}
+
+body.usuario-entregador #rotas-hero-card,
+body.usuario-entregador #rota-chip-nova {
+    display: none !important;
+}
+body.usuario-entregador #view-rotas > :not(#entregador-rotas-shell) {
+    display: none !important;
+}
+
+body.usuario-entregador #entregador-rotas-shell {
+    display: block !important;
+}
+
+.entregador-rotas-shell {
+    display: none;
+    padding-bottom: 112px;
+}
+
+.entregador-rotas-screen {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+}
+
+.entregador-rotas-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.entregador-rotas-logo {
+    display: inline-flex;
+    align-items: center;
+    gap: 2px;
+    font-size: 31px;
+    line-height: 1;
+    font-weight: 900;
+    letter-spacing: -0.7px;
+    color: #13203b;
+}
+
+.entregador-rotas-logo .accent {
+    color: var(--brand-orange);
+}
+
+.entregador-rotas-wallet {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    border-radius: 999px;
+    background: #fff;
+    border: 1px solid rgba(245, 130, 32, 0.3);
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.08);
+    padding: 7px 10px 7px 12px;
+}
+
+.entregador-rotas-wallet strong {
+    font-size: 15px;
+    color: #0f172a;
+    font-weight: 800;
+}
+
+.entregador-rotas-wallet-avatar {
+    width: 28px;
+    height: 28px;
+    border-radius: 999px;
+    object-fit: cover;
+    border: 2px solid #fef4ea;
+}
+
+.entregador-filtro-card {
+    border-radius: 18px;
+    background: rgba(255, 255, 255, 0.92);
+    border: 1px solid rgba(15, 23, 42, 0.06);
+    box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+    padding: 14px;
+}
+
+.entregador-filtro-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    margin-bottom: 8px;
+}
+
+.entregador-filtro-head h3 {
+    margin: 0;
+    font-size: 18px;
+    line-height: 1.1;
+    color: #12213c;
+    font-weight: 800;
+}
+
+.entregador-filtro-head button {
+    border: none;
+    background: transparent;
+    color: var(--brand-orange);
+    font-size: 13px;
+    font-weight: 700;
+    padding: 0;
+}
+
+.entregador-filtro-field {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    margin-top: 10px;
+}
+
+.entregador-filtro-field label {
+    font-size: 12px;
+    font-weight: 700;
+    color: #1f2f48;
+}
+
+.entregador-filtro-select {
+    width: 100%;
+    border-radius: 12px;
+    border: 1px solid #e2e8f0;
+    background: #fff;
+    color: #334155;
+    font-size: 14px;
+    font-weight: 600;
+    padding: 11px 12px;
+    outline: none;
+}
+
+.entregador-filtro-select:focus {
+    border-color: #f39a4b;
+    box-shadow: 0 0 0 2px rgba(245, 130, 32, 0.12);
+}
+
+.entregador-rotas-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.entregador-rota-card {
+    width: 100%;
+    border: 1px solid rgba(15, 23, 42, 0.06);
+    border-radius: 16px;
+    background: #fff;
+    box-shadow: 0 8px 20px rgba(15, 23, 42, 0.05);
+    padding: 11px 12px;
+    display: grid;
+    grid-template-columns: 46px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    text-align: left;
+}
+
+.entregador-rota-avatar {
+    width: 46px;
+    height: 46px;
+    border-radius: 14px;
+    background: #f3f7fb;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: #13203b;
+}
+
+.entregador-rota-info {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.entregador-rota-lojista {
+    font-size: 20px;
+    line-height: 1;
+    font-weight: 700;
+    color: #111827;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.entregador-rota-badge {
+    align-self: flex-start;
+    border-radius: 999px;
+    background: #eaf4ff;
+    color: #0e7ad3;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    line-height: 1;
+}
+
+.entregador-rota-meta {
+    font-size: 11px;
+    color: #7d8899;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.entregador-rota-status {
+    display: inline-flex;
+    border-radius: 999px;
+    font-size: 10px;
+    font-weight: 800;
+    padding: 4px 9px;
+    line-height: 1;
+    text-transform: uppercase;
+}
+
+.entregador-rota-status.status-buscando {
+    background: #fff2e9;
+    color: #da6f18;
+}
+
+.entregador-rota-status.status-em-rota {
+    background: #e8f3ff;
+    color: #1570d1;
+}
+
+.entregador-rota-status.status-finalizada {
+    background: #eaf9ef;
+    color: #0f9f57;
+}
+
+.entregador-rota-status.status-cancelado {
+    background: #fdecec;
+    color: #dc2626;
+}
+
+.entregador-rota-preco {
+    margin-top: 6px;
+    text-align: right;
+    color: #10b460;
+    font-size: 35px;
+    line-height: 1;
+    font-weight: 800;
+    white-space: nowrap;
+}
+
+.entregador-rotas-empty {
+    border: 1px dashed #cdd7e6;
+    border-radius: 14px;
+    background: rgba(255, 255, 255, 0.75);
+    padding: 18px 12px;
+    text-align: center;
+    font-size: 13px;
+    color: #6f7d90;
+    font-weight: 700;
+}
+
+/* ===================== [FIX MODAIS PERFIL LOJISTA] ===================== */
+.profile-account-overlay {
+    align-items: flex-end !important;
+}
+
+.profile-account-sheet {
+    max-height: min(88vh, 760px) !important;
+    width: 100%;
+    display: flex;
+    flex-direction: column;
+    padding: 18px 20px calc(14px + env(safe-area-inset-bottom, 0px)) 20px !important;
+    overflow: hidden !important;
+}
+
+.profile-account-scroll {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 4px;
+}
+
+.profile-account-footer {
+    position: sticky;
+    bottom: 0;
+    z-index: 4;
+    background: #fff;
+    padding-top: 12px;
+    padding-bottom: calc(6px + env(safe-area-inset-bottom, 0px));
+    margin-top: 10px;
+    border-top: 1px solid #f1f5f9;
+}
+
+.modal-has-footer {
+    max-height: min(88vh, 760px) !important;
+    padding-bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+}
+
+.modal-has-footer .modal-perfil-body {
+    flex: 1;
+    overflow-y: auto;
+    padding-right: 4px;
+    padding-bottom: 8px;
+}
+
+.modal-footer-sticky {
+    position: sticky;
+    bottom: 0;
+    z-index: 4;
+    margin-top: 0 !important;
+    background: #fff;
+    padding-top: 12px;
+    padding-bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+    border-top: 1px solid #f1f5f9;
+}
+
+/* ===================== [HOME ENTREGADOR] ===================== */
+#view-dash-entregador {
+    padding-bottom: 120px !important;
+}
+
+#dash-entregador-content {
+    min-height: 72vh;
+}

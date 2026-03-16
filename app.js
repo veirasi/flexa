@@ -39,11 +39,72 @@ let rotaSwipeCardAtivo = null;
 let filtroEnviosAtivo = 'TODOS';
 let filtroRotasAtivo = 'BUSCANDO';
 let dashboardRotasSincronizadas = false;
+let entregadorHomeListenerRef = null;
+let entregadorHomeListenerCb = null;
+let entregadorHomeListenerUid = null;
+let entregadorHomeCache = null;
+let rotasMarketplaceEntregadorCache = [];
+let filtroRotaEntregadorOrigem = 'TODAS';
+let filtroRotaEntregadorDestino = 'TODAS';
 
 function getUsuarioIdAtual() {
     return usuarioLogado?.id || (firebase.auth().currentUser ? firebase.auth().currentUser.uid : null);
 }
 
+function obterTipoUsuarioAtual() {
+    const tipoRaw = normalizarTexto(window.usuarioLogado?.tipo || usuarioLogado?.tipo || 'loja');
+    return (tipoRaw === 'entregador' || tipoRaw === 'entrega') ? 'entregador' : 'loja';
+}
+
+function usuarioEhEntregador() {
+    return obterTipoUsuarioAtual() === 'entregador';
+}
+
+function telaInicialPorTipoUsuario(tipo) {
+    return tipo === 'entregador' ? 'view-dash-entregador' : 'view-dash-loja';
+}
+
+function telaPerfilPorTipoUsuario(tipo) {
+    return tipo === 'entregador' ? 'view-perfil-entregador' : 'view-perfil';
+}
+
+function aplicarPermissoesPorTipoUsuario() {
+    const tipo = obterTipoUsuarioAtual();
+    const ehEntregador = tipo === 'entregador';
+
+    if (document.body) {
+        document.body.classList.toggle('usuario-entregador', ehEntregador);
+    }
+
+    const tituloRotas = document.getElementById('rotas-main-title');
+    if (tituloRotas) {
+        tituloRotas.innerText = ehEntregador ? 'Rotas disponíveis' : 'Rotas aguardando';
+    }
+}
+
+function preencherPerfilLojista() {
+    const dados = window.usuarioLogado || {};
+    const nomeEl = document.getElementById('perfil-nome-display');
+    const instaEl = document.getElementById('perfil-insta-display');
+    const fotoEl = document.getElementById('perfil-foto-display');
+
+    if (nomeEl) nomeEl.innerText = dados.nome || 'Usuário';
+    if (instaEl) instaEl.innerText = dados.instagram || '@seuinsta';
+    if (fotoEl) fotoEl.src = dados.foto || 'https://via.placeholder.com/110';
+}
+
+function preencherPerfilEntregador() {
+    const dados = window.usuarioLogado || {};
+    const nomeEl = document.getElementById('perfil-entregador-nome-display');
+    const emailEl = document.getElementById('perfil-entregador-email-display');
+    const fotoEl = document.getElementById('perfil-entregador-foto-display');
+    const cnhEl = document.getElementById('perfil-entregador-cnh-display');
+
+    if (nomeEl) nomeEl.innerText = dados.nome || 'Entregador';
+    if (emailEl) emailEl.innerText = dados.email || '--';
+    if (fotoEl) fotoEl.src = dados.foto || 'https://via.placeholder.com/110';
+    if (cnhEl) cnhEl.innerText = (dados.cnh || '--').toString();
+}
 async function loadClientes() {
     const uid = getUsuarioIdAtual();
     if (uid) {
@@ -873,20 +934,38 @@ window.addEventListener('resize', () => {
 });
 
 function navegar(idTela) {
-    if (idTela === 'view-perfil' && window.usuarioLogado) {
-        const dados = window.usuarioLogado;
-        if (document.getElementById('perfil-nome-display')) {
-            document.getElementById('perfil-nome-display').innerText = dados.nome || 'Usuário';
-            document.getElementById('perfil-insta-display').innerText = dados.instagram || '@seuinsta';
-            document.getElementById('perfil-foto-display').src = dados.foto || 'https://via.placeholder.com/110';
+    const tipo = obterTipoUsuarioAtual();
+    let telaAlvo = idTela;
+
+    if (tipo === 'entregador') {
+        if (telaAlvo === 'view-dash-loja') {
+            telaAlvo = 'view-dash-entregador';
+        }
+        if (telaAlvo === 'view-novo-envio') {
+            telaAlvo = 'view-rotas';
+        }
+        if (telaAlvo === 'view-perfil') {
+            telaAlvo = 'view-perfil-entregador';
+        }
+    } else {
+        if (telaAlvo === 'view-perfil-entregador') {
+            telaAlvo = 'view-perfil';
         }
     }
 
+    if (telaAlvo === 'view-perfil' && window.usuarioLogado) {
+        preencherPerfilLojista();
+    }
+
+    if (telaAlvo === 'view-perfil-entregador' && window.usuarioLogado) {
+        preencherPerfilEntregador();
+    }
+
     document.querySelectorAll('.view').forEach((v) => v.classList.remove('active'));
-    const target = document.getElementById(idTela);
+    const target = document.getElementById(telaAlvo);
     if (target) target.classList.add('active');
 
-    if (idTela !== 'view-novo-envio') {
+    if (telaAlvo !== 'view-novo-envio') {
         const passos = ['envio-p1', 'envio-p2', 'envio-p3', 'envio-p4', 'envio-p5', 'envio-v-veiculo'];
         passos.forEach((id) => {
             const el = document.getElementById(id);
@@ -900,37 +979,49 @@ function navegar(idTela) {
         if (typeof fecharSeletorCliente === 'function') fecharSeletorCliente();
     }
 
-    if (idTela === 'view-novo-envio') {
+    if (telaAlvo === 'view-novo-envio') {
         if (typeof initClienteSearch === 'function') initClienteSearch();
         if (typeof initClientes === 'function') initClientes();
     }
 
-    if (idTela === 'view-dash-loja') {
+    if (telaAlvo === 'view-dash-loja' && tipo !== 'entregador') {
         renderizarDashboard(window.usuarioLogado || {});
     }
 
-    if (idTela === 'view-rotas') {
+    if (telaAlvo === 'view-dash-entregador' && tipo === 'entregador') {
+        renderizarDashboardEntregador(window.usuarioLogado || {});
+        iniciarListenerHomeEntregador();
+    } else if (tipo === 'entregador') {
+        pararListenerHomeEntregador();
+    }
+
+    if (telaAlvo === 'view-rotas') {
         if (typeof atualizarLocalColetaDinamico === 'function') atualizarLocalColetaDinamico();
         if (typeof renderRotasTelaPrincipal === 'function') renderRotasTelaPrincipal();
     }
 
     const nav = document.getElementById('main-nav');
-    const telasComMenu = ['view-dash-loja', 'view-novo-envio', 'view-rotas', 'view-perfil'];
+    const telasComMenu = (tipo === 'entregador')
+        ? ['view-dash-entregador', 'view-rotas', 'view-chat', 'view-perfil-entregador']
+        : ['view-dash-loja', 'view-novo-envio', 'view-rotas', 'view-chat', 'view-perfil'];
 
     if (nav) {
-        const mostrarMenu = telasComMenu.includes(idTela);
+        const mostrarMenu = telasComMenu.includes(telaAlvo);
         nav.style.display = mostrarMenu ? 'flex' : 'none';
 
         if (mostrarMenu) {
-            ativarMenuInferior(idTela);
+            const navTarget = telaAlvo === 'view-perfil-entregador'
+                ? 'view-perfil'
+                : (telaAlvo === 'view-dash-entregador' ? 'view-dash-loja' : telaAlvo);
+            ativarMenuInferior(navTarget);
         }
     }
 
+    aplicarPermissoesPorTipoUsuario();
 
     window.scrollTo(0, 0);
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
-
 // --- CÓDIGO DO SWIPE (DESLIZAR) ---
 let touchStartX = 0;
         let activeCard = null;
@@ -1860,45 +1951,52 @@ async function loginReal() {
     const email = document.getElementById('email-login').value;
     const senha = document.getElementById('pass-login').value;
 
-    if (!email || !senha) return alert("Preencha e-mail e senha!");
+    if (!email || !senha) return alert('Preencha e-mail e senha!');
 
     try {
         const cred = await auth.signInWithEmailAndPassword(email, senha);
         const snapshot = await db.ref('usuarios/' + cred.user.uid).once('value');
         const dadosUser = snapshot.val();
 
-        if (dadosUser) {
-            usuarioLogado = { id: cred.user.uid, ...dadosUser };
-            localStorage.setItem('flexa_session', JSON.stringify(usuarioLogado));
-            
-            // 1. Muda para a tela de Dash
-            navegar('view-dash-loja');
-            
-            // 2. Preenche o Dashboard IMEDIATAMENTE (Parando o efeito de carregar)
+        if (!dadosUser) {
+            alert('Conta sem perfil no banco. Fale com o suporte.');
+            return;
+        }
+
+        usuarioLogado = { id: cred.user.uid, ...dadosUser };
+        window.usuarioLogado = usuarioLogado;
+        localStorage.setItem('flexa_session', JSON.stringify(usuarioLogado));
+
+        const tipo = obterTipoUsuarioAtual();
+        aplicarPermissoesPorTipoUsuario();
+        navegar(telaInicialPorTipoUsuario(tipo));
+
+        if (tipo !== 'entregador') {
+            pararListenerHomeEntregador();
             renderizarDashboard(usuarioLogado);
+        } else {
+            renderizarDashboardEntregador(usuarioLogado);
+            iniciarListenerHomeEntregador();
         }
     } catch (error) {
-        alert("Erro ao entrar: " + error.message);
+        alert('Erro ao entrar: ' + error.message);
     }
 }
+
 // --- FUN - fO PARA IR AO PERFIL E CARREGAR DADOS ---
 function irParaPerfil() {
-    // 1. Ativa a visualização
-    navegar('view-perfil');
-    
-    // 2. Preenche os dados se o usuário estiver logado
-    if (usuarioLogado) {
-        document.getElementById('perfil-nome-loja').innerText = usuarioLogado.nome || "Minha Loja";
-        document.getElementById('perfil-email-loja').innerText = usuarioLogado.email || "";
-        
-        if (usuarioLogado.logo) {
-            document.getElementById('img-perfil-display').src = usuarioLogado.logo;
-        }
+    const tipo = obterTipoUsuarioAtual();
+    if (tipo === 'entregador') {
+        preencherPerfilEntregador();
+        navegar('view-perfil-entregador');
+    } else {
+        preencherPerfilLojista();
+        navegar('view-perfil');
     }
-    
-    // 3. Renderiza os Ícones da Lucide que acabaram de aparecer
-    lucide.createIcons();
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
 }
+
 // --- FUN - fO DE LOGOUT ---
 // 1. FUN - fO PARA LOGOUT
 function logoutReal() {
@@ -1922,32 +2020,57 @@ firebase.auth().onAuthStateChanged((user) => {
     const splash = document.getElementById('splash-screen');
 
     if (user) {
-        // Usuário Logado
         firebase.database().ref('usuarios/' + user.uid).once('value')
             .then((snapshot) => {
                 const userData = snapshot.val();
                 if (userData) {
                     window.usuarioLogado = { id: user.uid, ...userData };
+                    usuarioLogado = window.usuarioLogado;
+
                     dashboardRotasSincronizadas = false;
-                    renderizarDashboard(userData);
+                    rotasHomeCache = [];
+                    rotasMarketplaceEntregadorCache = [];
+                    filtroRotaEntregadorOrigem = 'TODAS';
+                    filtroRotaEntregadorDestino = 'TODAS';
+                    aplicarPermissoesPorTipoUsuario();
+
+                    const tipo = obterTipoUsuarioAtual();
+                    const telaInicial = telaInicialPorTipoUsuario(tipo);
+
+                    if (tipo !== 'entregador') {
+                        pararListenerHomeEntregador();
+                        renderizarDashboard(userData);
+                    } else {
+                        renderizarDashboardEntregador(window.usuarioLogado || userData);
+                        iniciarListenerHomeEntregador();
+                    }
+
                     atualizarLocalColetaDinamico();
-                    navegar('view-dash-loja');
+                    navegar(telaInicial);
+
                     if (tabbar) tabbar.style.display = 'flex';
                     initClientes();
                 }
                 finalizarSplash(splash);
-            }).catch(() => finalizarSplash(splash));
+            })
+            .catch(() => finalizarSplash(splash));
     } else {
-        // Usuário Deslogado
         dashboardRotasSincronizadas = false;
         rotasHomeCache = [];
+        rotasMarketplaceEntregadorCache = [];
+        filtroRotaEntregadorOrigem = 'TODAS';
+        filtroRotaEntregadorDestino = 'TODAS';
+        window.usuarioLogado = null;
+        usuarioLogado = null;
+        pararListenerHomeEntregador();
+        if (document.body) document.body.classList.remove('usuario-entregador');
+
         navegar('view-inicio');
         if (tabbar) tabbar.style.display = 'none';
         initClientes();
         finalizarSplash(splash);
     }
 });
-
 document.addEventListener('DOMContentLoaded', () => {
     initClienteSearch();
     initClientes();
@@ -2350,7 +2473,296 @@ async function carregarRotasDoBanco() {
         return [];
     }
 }
+function escaparHtmlMarketplace(valor) {
+    const txt = (valor || '').toString();
+    if (typeof escapeHtmlChat === 'function') return escapeHtmlChat(txt);
+    return txt
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
 
+function montarCidadeUfMarketplace(cidade, uf) {
+    const c = (cidade || '').toString().trim();
+    const u = normalizarUf(uf || '');
+    if (c && u) return `${c}, ${u}`;
+    return c || '--';
+}
+
+function obterCidadeDestinoPacoteMarketplace(pacote = {}) {
+    const cidadeDireta = (pacote?.cidade || '').toString().trim();
+    if (cidadeDireta) return cidadeDireta;
+
+    const destino = (pacote?.destino || pacote?.destinoEndereco || '').toString().trim();
+    if (!destino) return '';
+
+    const antesUf = destino.includes('/') ? destino.split('/')[0] : destino;
+    const partesVirgula = antesUf.split(',').map((p) => p.trim()).filter(Boolean);
+    if (partesVirgula.length) {
+        const ultima = partesVirgula[partesVirgula.length - 1];
+        if (ultima) return ultima.replace(/\)$/g, '').trim();
+    }
+
+    const partesTraco = destino.split('-').map((p) => p.trim()).filter(Boolean);
+    return partesTraco.length ? partesTraco[partesTraco.length - 1] : '';
+}
+
+function montarMapaPacotesUsuarioMarketplace(clientesNo = {}) {
+    const mapa = new Map();
+    const listaClientes = Object.keys(clientesNo || {}).map((id) => ({ id, ...(clientesNo[id] || {}) }));
+
+    listaClientes.forEach((cliente) => {
+        const historico = Array.isArray(cliente?.historico) ? cliente.historico : [];
+        const cidadeCliente = (cliente?.cidade || extrairCamposEnderecoCliente(cliente || {}).cidade || '').trim();
+
+        historico.forEach((h, idx) => {
+            const idEnvio = h?.id || ('envio-' + cliente.id + '-' + idx);
+            mapa.set(idEnvio, {
+                id: idEnvio,
+                clienteNome: (h?.destinatario || cliente?.nome || 'Cliente').toString().trim(),
+                cidade: (h?.cidadeDestino || h?.cidade || cidadeCliente || '').toString().trim(),
+                destino: (h?.destinoEndereco || montarEnderecoParaCalculo(cliente, cliente?.endereco || '') || '').toString().trim(),
+                servico: (h?.servico || 'Standard').toString().trim(),
+                status: normalizarStatusPacoteEntrega(h?.status || 'PENDENTE'),
+                distanciaKm: Number.isFinite(Number(h?.distanciaKm)) ? Number(h.distanciaKm) : 0,
+                duracaoMin: Number.isFinite(Number(h?.duracaoMin)) ? Number(h.duracaoMin) : 0,
+                valorFrete: Number.isFinite(Number(h?.valorFrete)) ? Number(h.valorFrete) : parseMoedaParaNumero(h?.valor || 0)
+            });
+        });
+    });
+
+    return mapa;
+}
+
+async function carregarMarketplaceRotasEntregador() {
+    try {
+        const snap = await db.ref('usuarios').once('value');
+        const usuariosNo = snap.val() || {};
+        const lista = [];
+
+        Object.keys(usuariosNo).forEach((uid) => {
+            const usuario = usuariosNo[uid] || {};
+            const tipo = normalizarTexto(usuario?.tipo || 'loja');
+            if (tipo === 'entregador' || tipo === 'entrega') return;
+
+            const rotasNo = usuario?.rotas || {};
+            const rotaIds = Object.keys(rotasNo || {});
+            if (!rotaIds.length) return;
+
+            const lojistaNome = (usuario?.nome || usuario?.loja || 'Lojista').toString().trim() || 'Lojista';
+            const origemCidade = (usuario?.endereco?.cidade || '').toString().trim();
+            const origemUf = normalizarUf(usuario?.endereco?.uf || usuario?.endereco?.estado || '');
+            const origemLabel = montarCidadeUfMarketplace(origemCidade, origemUf);
+
+            const mapaPacotes = montarMapaPacotesUsuarioMarketplace(usuario?.clientes || {});
+
+            rotaIds.forEach((rotaId) => {
+                const rota = { id: rotaId, ...(rotasNo[rotaId] || {}) };
+                const statusNorm = normalizarStatusRotaFiltro(rota?.status || rota?.pagamentoStatus || 'CRIADA');
+                const statusVisual = getStatusVisualRota(statusNorm);
+
+                const pacoteIds = Array.isArray(rota?.pacoteIds)
+                    ? rota.pacoteIds
+                    : (Array.isArray(rota?.pacotes) ? rota.pacotes : []);
+                const pacotes = pacoteIds.map((idEnvio) => mapaPacotes.get(idEnvio)).filter(Boolean);
+
+                const destinos = [...new Set(
+                    pacotes
+                        .map((p) => obterCidadeDestinoPacoteMarketplace(p))
+                        .filter(Boolean)
+                        .map((c) => c.trim())
+                )];
+
+                const qtdDestinos = destinos.length;
+                const destinoPrincipal = destinos[0] || '--';
+                const totalPacotes = Number(rota?.quantidade || pacotes.length || 0);
+
+                const totalFrete = Number.isFinite(Number(rota?.totalFrete))
+                    ? Number(rota.totalFrete)
+                    : pacotes.reduce((acc, p) => acc + Number(p?.valorFrete || 0), 0);
+                const distanciaTotal = pacotes.reduce((acc, p) => acc + Number(p?.distanciaKm || 0), 0);
+                const duracaoTotal = pacotes.reduce((acc, p) => acc + Number(p?.duracaoMin || 0), 0);
+
+                const temFlash = pacotes.some((p) => {
+                    const serv = normalizarTexto(p?.servico || '');
+                    return serv.includes('flash') || serv.includes('expresso');
+                });
+                const servicoLabel = temFlash ? 'Expresso' : 'Padrao';
+
+                lista.push({
+                    id: rota.id,
+                    lojistaUid: uid,
+                    lojistaNome,
+                    origemCidade: origemCidade || '--',
+                    origemLabel,
+                    destinoPrincipal,
+                    destinos,
+                    totalPacotes,
+                    totalFrete,
+                    distanciaTotal,
+                    duracaoTotal,
+                    statusNorm,
+                    statusVisual,
+                    servicoLabel,
+                    criadoEm: Number(rota?.criadoEm || 0)
+                });
+            });
+        });
+
+        const ordemStatus = { BUSCANDO: 0, EM_ROTA: 1, CONCLUIDO: 2, CANCELADO: 3 };
+        return lista.sort((a, b) => {
+            const oa = ordemStatus[a.statusNorm] ?? 99;
+            const ob = ordemStatus[b.statusNorm] ?? 99;
+            if (oa !== ob) return oa - ob;
+            return Number(b.criadoEm || 0) - Number(a.criadoEm || 0);
+        });
+    } catch (err) {
+        console.warn('Falha ao carregar marketplace de rotas para entregador:', err);
+        return [];
+    }
+}
+
+function rotaMarketplacePassaNoFiltro(rota) {
+    const origemAlvo = normalizarTexto(filtroRotaEntregadorOrigem || 'TODAS');
+    const destinoAlvo = normalizarTexto(filtroRotaEntregadorDestino || 'TODAS');
+
+    const passouOrigem = origemAlvo === 'todas' || normalizarTexto(rota?.origemCidade || '') === origemAlvo;
+    const passouDestino = destinoAlvo === 'todas'
+        || normalizarTexto(rota?.destinoPrincipal || '') === destinoAlvo
+        || (Array.isArray(rota?.destinos) && rota.destinos.some((c) => normalizarTexto(c) === destinoAlvo));
+
+    return passouOrigem && passouDestino;
+}
+
+function montarCardMarketplaceRotaEntregador(rota) {
+    const qtdDestinos = Math.max(1, Number(rota?.destinos?.length || 0));
+    const badgeTxt = `${rota.servicoLabel} • ${qtdDestinos} destino${qtdDestinos > 1 ? 's' : ''}`;
+    const precoTxt = precoParaMoeda(Number(rota?.totalFrete || 0));
+    const statusClass = String(rota?.statusVisual?.className || '').replace('rota-main-status ', '');
+
+    return `
+        <article class="entregador-rota-card">
+            <div class="entregador-rota-avatar"><i data-lucide="package"></i></div>
+            <div class="entregador-rota-info">
+                <div class="entregador-rota-lojista">${escaparHtmlMarketplace(rota.lojistaNome)}</div>
+                <span class="entregador-rota-badge">${escaparHtmlMarketplace(badgeTxt)}</span>
+                <div class="entregador-rota-meta">${escaparHtmlMarketplace(rota.origemLabel)} → ${escaparHtmlMarketplace(rota.destinoPrincipal)} • ${formatarDistancia(rota.distanciaTotal)} • ${formatarDuracao(rota.duracaoTotal)}</div>
+                <div class="entregador-rota-meta">Rota ${escaparHtmlMarketplace(rota.id)} • ${Number(rota.totalPacotes || 0)} pacote(s)</div>
+            </div>
+            <div>
+                <span class="entregador-rota-status ${escaparHtmlMarketplace(statusClass)}">${escaparHtmlMarketplace(rota?.statusVisual?.label || 'BUSCANDO')}</span>
+                <div class="entregador-rota-preco">${escaparHtmlMarketplace(precoTxt)}</div>
+            </div>
+        </article>
+    `;
+}
+
+function montarOptionsFiltroMarketplace(cidades, valorAtual, labelPadrao) {
+    const atualNorm = (valorAtual || 'TODAS').toString();
+    const opcoes = ['TODAS', ...cidades];
+    return opcoes.map((cidade) => {
+        const selecionado = cidade === atualNorm ? 'selected' : '';
+        const label = cidade === 'TODAS' ? labelPadrao : cidade;
+        return `<option value="${escaparHtmlMarketplace(cidade)}" ${selecionado}>${escaparHtmlMarketplace(label)}</option>`;
+    }).join('');
+}
+
+function atualizarListaMarketplaceRotasEntregador() {
+    const list = document.getElementById('entregador-rotas-list');
+    if (!list) return;
+
+    const filtradas = rotasMarketplaceEntregadorCache.filter((rota) => rotaMarketplacePassaNoFiltro(rota));
+
+    if (!filtradas.length) {
+        list.innerHTML = '<div class="entregador-rotas-empty">Nenhuma rota encontrada para esse filtro.</div>';
+        return;
+    }
+
+    list.innerHTML = filtradas.map((rota) => montarCardMarketplaceRotaEntregador(rota)).join('');
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function aplicarFiltroRotaEntregador(tipo, valor) {
+    if (tipo === 'origem') filtroRotaEntregadorOrigem = (valor || 'TODAS').toString();
+    if (tipo === 'destino') filtroRotaEntregadorDestino = (valor || 'TODAS').toString();
+    atualizarListaMarketplaceRotasEntregador();
+}
+
+function limparFiltrosRotaEntregador() {
+    filtroRotaEntregadorOrigem = 'TODAS';
+    filtroRotaEntregadorDestino = 'TODAS';
+
+    const origemSel = document.getElementById('entregador-filtro-origem');
+    const destinoSel = document.getElementById('entregador-filtro-destino');
+    if (origemSel) origemSel.value = 'TODAS';
+    if (destinoSel) destinoSel.value = 'TODAS';
+
+    atualizarListaMarketplaceRotasEntregador();
+}
+
+async function renderRotasMarketplaceEntregador(forceReload = false) {
+    const shell = document.getElementById('entregador-rotas-shell');
+    if (!shell || !usuarioEhEntregador()) return;
+
+    shell.classList.remove('hidden');
+    if (forceReload || !Array.isArray(rotasMarketplaceEntregadorCache) || !rotasMarketplaceEntregadorCache.length) {
+        shell.innerHTML = '<div class="entregador-rotas-empty">Carregando rotas disponiveis...</div>';
+        rotasMarketplaceEntregadorCache = await carregarMarketplaceRotasEntregador();
+    }
+
+    const cidadesOrigem = [...new Set(rotasMarketplaceEntregadorCache.map((r) => (r.origemCidade || '').trim()).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+    const cidadesDestino = [...new Set(rotasMarketplaceEntregadorCache.flatMap((r) => Array.isArray(r.destinos) ? r.destinos : []).filter(Boolean))]
+        .sort((a, b) => a.localeCompare(b, 'pt-BR'));
+
+    const cidadeAtualEntregador = (window.usuarioLogado?.endereco?.cidade || '').toString().trim();
+    if (filtroRotaEntregadorOrigem === 'TODAS' && cidadeAtualEntregador && cidadesOrigem.includes(cidadeAtualEntregador)) {
+        filtroRotaEntregadorOrigem = cidadeAtualEntregador;
+    }
+
+    const saldo = Number(window.usuarioLogado?.financeiro?.saldo || 0);
+    const foto = window.usuarioLogado?.foto || 'https://via.placeholder.com/110';
+
+    shell.innerHTML = `
+        <div class="entregador-rotas-screen">
+            <div class="entregador-rotas-top">
+                <div class="entregador-rotas-logo" aria-label="Flexa"><span>FLEX</span><span class="accent">A</span></div>
+                <div class="entregador-rotas-wallet">
+                    <strong>${precoParaMoeda(saldo)}</strong>
+                    <img src="${escaparHtmlMarketplace(foto)}" alt="Usuario" class="entregador-rotas-wallet-avatar">
+                </div>
+            </div>
+
+            <div class="entregador-filtro-card">
+                <div class="entregador-filtro-head">
+                    <h3>Filtrar por Origem e Destino</h3>
+                    <button type="button" onclick="limparFiltrosRotaEntregador()">Limpar filtros</button>
+                </div>
+
+                <div class="entregador-filtro-field">
+                    <label for="entregador-filtro-origem">Cidade origem (onde voce esta)</label>
+                    <select id="entregador-filtro-origem" class="entregador-filtro-select" onchange="aplicarFiltroRotaEntregador('origem', this.value)">
+                        ${montarOptionsFiltroMarketplace(cidadesOrigem, filtroRotaEntregadorOrigem, 'Qualquer origem')}
+                    </select>
+                </div>
+
+                <div class="entregador-filtro-field">
+                    <label for="entregador-filtro-destino">Cidade destino (para onde vai)</label>
+                    <select id="entregador-filtro-destino" class="entregador-filtro-select" onchange="aplicarFiltroRotaEntregador('destino', this.value)">
+                        ${montarOptionsFiltroMarketplace(cidadesDestino, filtroRotaEntregadorDestino, 'Qualquer destino')}
+                    </select>
+                </div>
+            </div>
+
+            <div id="entregador-rotas-list" class="entregador-rotas-list"></div>
+        </div>
+    `;
+
+    atualizarListaMarketplaceRotasEntregador();
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
 function resumirCidadesRota(pacotes) {
     const cidades = [...new Set(pacotes.map((p) => (p.cidade || '').trim()).filter(Boolean))];
     if (!cidades.length) return { principal: 'Sem cidade', extras: 0, total: 0 };
@@ -2376,9 +2788,17 @@ function formatarTamanhoTotalRota(pacotes) {
 }
 
 async function renderRotasTelaPrincipal() {
+    if (usuarioEhEntregador()) {
+        await renderRotasMarketplaceEntregador(true);
+        return;
+    }
     const container = document.getElementById('rotas-main-list');
     const link = document.getElementById('rotas-ver-todas');
     if (!container) return;
+
+    const msgSemRota = usuarioEhEntregador()
+        ? 'Nenhuma rota disponivel no momento.'
+        : 'Voce ainda nao criou nenhuma rota.';
 
     container.innerHTML = '<div class="rota-main-empty">Carregando rotas...</div>';
 
@@ -2394,7 +2814,7 @@ async function renderRotasTelaPrincipal() {
     }
 
     if (!rotas.length) {
-        container.innerHTML = '<div class="rota-main-empty">Voce ainda nao criou nenhuma rota.</div>';
+        container.innerHTML = `<div class="rota-main-empty">${msgSemRota}</div>`;
         if (link) link.style.display = 'none';
         return;
     }
@@ -2616,6 +3036,7 @@ function fecharSwipesRota(exceptId = null) {
 }
 
 function handleRotaTouchStart(event) {
+    if (usuarioEhEntregador()) return;
     rotaSwipeStartX = event.touches[0].clientX;
     rotaSwipeCardAtivo = event.currentTarget;
     if (!rotaSwipeCardAtivo) return;
@@ -2675,6 +3096,10 @@ function handleRotaCardClick(event, rotaId) {
 }
 
 async function excluirRotaPorId(rotaId, opts = {}) {
+    if (usuarioEhEntregador()) {
+        alert('Perfil entregador nao pode excluir rotas.');
+        return;
+    }
     const confirmar = opts?.confirmar !== false;
     if (!rotaId) return;
 
@@ -3356,6 +3781,10 @@ function iniciarModalRota() {
 }
 
 function openModal() {
+    if (usuarioEhEntregador()) {
+        alert('Perfil entregador nao pode criar rota. Escolha uma rota disponivel.');
+        return;
+    }
     if (!overlayRota || !sheetRota) return;
     iniciarModalRota();
     overlayRota.style.display = 'flex';
@@ -3364,7 +3793,6 @@ function openModal() {
         if (typeof lucide !== 'undefined') lucide.createIcons();
     }, 10);
 }
-
 function closeModal() {
     if (!overlayRota || !sheetRota) return;
     sheetRota.classList.remove('show');
@@ -3406,19 +3834,32 @@ function abrirModalPerfil() {
         document.getElementById('edit-whatsapp').value = user.whatsapp || '';
         if (user.foto) document.getElementById('edit-preview-img').src = user.foto;
     }
-    
+
     const overlay = document.getElementById('overlay-perfil');
     const sheet = document.getElementById('sheet-perfil');
+    if (!overlay || !sheet) return;
+
     overlay.style.display = 'flex';
-    setTimeout(() => sheet.style.transform = 'translateY(0)', 10);
+    requestAnimationFrame(() => {
+        overlay.classList.add('is-open');
+        sheet.style.transform = 'translateY(0)';
+        sheet.style.opacity = '1';
+    });
 }
 
 function fecharModalPerfil() {
+    const overlay = document.getElementById('overlay-perfil');
     const sheet = document.getElementById('sheet-perfil');
-    sheet.style.transform = 'translateY(100%)';
-    setTimeout(() => document.getElementById('overlay-perfil').style.display = 'none', 400);
-}
+    if (!overlay || !sheet) return;
 
+    overlay.classList.remove('is-open');
+    sheet.style.transform = 'translateY(100%)';
+    sheet.style.opacity = '0';
+
+    setTimeout(() => {
+        overlay.style.display = 'none';
+    }, 240);
+}
 // Preview da imagem selecionada
 function previewImagem(input) {
     if (input.files && input.files[0]) {
@@ -3452,15 +3893,9 @@ function salvarPerfil() {
         .then(() => {
             // 3. Atualiza o objeto na memória do app
             window.usuarioLogado = { ...window.usuarioLogado, ...novosDados };
-            
-            // 4. Atualiza os textos na tela de perfil usando os IDs corretos
-            const nomeDisp = document.getElementById('perfil-nome-display');
-            const instaDisp = document.getElementById('perfil-insta-display');
-            const fotoDisp = document.getElementById('perfil-foto-display');
-
-            if (nomeDisp) nomeDisp.innerText = novosDados.nome;
-            if (instaDisp) instaDisp.innerText = novosDados.instagram;
-            if (fotoDisp) fotoDisp.src = novosDados.foto;
+            // 4. Atualiza as duas telas de perfil (lojista e entregador)
+            preencherPerfilLojista();
+            preencherPerfilEntregador();
             
             fecharModalPerfil();
             
@@ -4612,15 +5047,24 @@ navegar = function navegarComChat(idTela) {
 
     const nav = document.getElementById('main-nav');
     if (nav) {
-        const telasComMenu = ['view-dash-loja', 'view-novo-envio', 'view-rotas', 'view-chat', 'view-perfil'];
-        const mostrarMenu = telasComMenu.includes(idTela);
+        const tipo = obterTipoUsuarioAtual();
+        const telasComMenu = (tipo === 'entregador')
+            ? ['view-dash-entregador', 'view-rotas', 'view-chat', 'view-perfil-entregador']
+            : ['view-dash-loja', 'view-novo-envio', 'view-rotas', 'view-chat', 'view-perfil'];
+
+        const telaAtual = document.querySelector('.view.active')?.id || idTela;
+        const mostrarMenu = telasComMenu.includes(telaAtual);
         nav.style.display = mostrarMenu ? 'flex' : 'none';
         if (mostrarMenu) {
-            ativarMenuInferior(idTela);
+            const navTarget = telaAtual === 'view-perfil-entregador'
+                ? 'view-perfil'
+                : (telaAtual === 'view-dash-entregador' ? 'view-dash-loja' : telaAtual);
+            ativarMenuInferior(navTarget);
         }
     }
 
-    if (idTela === 'view-chat') {
+    const telaAtual = document.querySelector('.view.active')?.id || idTela;
+    if (telaAtual === 'view-chat') {
         abrirPainelListaChat();
         carregarChatsAtivos();
     } else if (chatAtualId) {
@@ -4628,8 +5072,9 @@ navegar = function navegarComChat(idTela) {
         chatAtualId = null;
         limparPreviewImagemChat();
     }
-};
 
+    aplicarPermissoesPorTipoUsuario();
+};
 // ===================== [PAGAMENTO + SUPORTE PERFIL] =====================
 let pagamentoPerfilCache = {
     saldo: 0,
@@ -4981,3 +5426,370 @@ registrarTransacaoFinanceira = async function registrarTransacaoFinanceiraComExt
     await _registrarTransacaoFinanceiraOriginal(tipo, valor, descricao);
     await carregarExtratoPagamento();
 };
+
+// ===================== [TIPO DE USUARIO: LOJISTA x ENTREGADOR] =====================
+let tipoCadastroSelecionado = 'loja';
+
+function normalizarTipoCadastro(valor) {
+    return String(valor || '').toLowerCase() === 'entrega' ? 'entrega' : 'loja';
+}
+
+function aplicarTipoCadastroNaTela() {
+    const labelNome = document.getElementById('label-nome');
+    const inputNome = document.getElementById('input-nome');
+    const groupCnh = document.getElementById('group-cnh');
+    const cnhInput = groupCnh ? groupCnh.querySelector('input') : null;
+
+    const ehEntregador = tipoCadastroSelecionado === 'entrega';
+
+    if (labelNome) labelNome.innerText = ehEntregador ? 'Nome completo' : 'Nome da loja';
+    if (inputNome) {
+        inputNome.placeholder = ehEntregador ? 'Digite seu nome completo' : 'Digite o nome da loja';
+    }
+
+    if (groupCnh) {
+        groupCnh.classList.toggle('hidden', !ehEntregador);
+    }
+
+    if (cnhInput) {
+        cnhInput.required = ehEntregador;
+        if (!ehEntregador) cnhInput.value = '';
+    }
+}
+
+function irParaCadastro(tipo) {
+    tipoCadastroSelecionado = normalizarTipoCadastro(tipo);
+    navegar('view-auth');
+    alternarAuth('entrar');
+    aplicarTipoCadastroNaTela();
+}
+
+const _alternarAuthComTipoOriginal = alternarAuth;
+alternarAuth = function alternarAuthComTipo(modo) {
+    _alternarAuthComTipoOriginal(modo);
+    aplicarTipoCadastroNaTela();
+};
+
+cadastrarReal = async function cadastrarRealComTipo() {
+    const nome = (document.getElementById('input-nome')?.value || '').trim();
+    const email = (document.querySelector('#form-cadastrar input[type="email"]')?.value || '').trim();
+    const senha = (document.getElementById('pass-cad')?.value || '').trim();
+    const cnh = (document.getElementById('input-cnh')?.value || '').trim();
+
+    if (!nome || !email || !senha) return alert('Preencha todos os campos.');
+
+    const ehEntregador = tipoCadastroSelecionado === 'entrega';
+    if (ehEntregador && !cnh) {
+        alert('Preencha o numero da CNH para cadastro de entregador.');
+        return;
+    }
+
+    try {
+        const cred = await auth.createUserWithEmailAndPassword(email, senha);
+        const payload = {
+            nome,
+            email,
+            tipo: ehEntregador ? 'entregador' : 'loja',
+            criadoEm: Date.now()
+        };
+        if (ehEntregador) payload.cnh = cnh;
+
+        await db.ref('usuarios/' + cred.user.uid).set(payload);
+
+        alert('Conta criada com sucesso.');
+        alternarAuth('entrar');
+    } catch (error) {
+        alert('Erro ao cadastrar: ' + error.message);
+    }
+};
+
+// Estado inicial da tela de autenticacao
+setTimeout(() => {
+    aplicarTipoCadastroNaTela();
+}, 0);
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// ===================== [HOME ENTREGADOR] =====================
+function normalizarStatusPacoteEntrega(statusRaw) {
+    return normalizarStatusEnvioFiltro(statusRaw || 'PENDENTE');
+}
+
+function montarMapaPacotesParaEntregador(clientesNo = {}) {
+    const mapa = new Map();
+    const listaClientes = Object.keys(clientesNo || {}).map((id) => ({ id, ...(clientesNo[id] || {}) }));
+
+    listaClientes.forEach((cliente) => {
+        const historico = Array.isArray(cliente?.historico) ? cliente.historico : [];
+        const cidade = (cliente?.cidade || extrairCamposEnderecoCliente(cliente || {}).cidade || '').trim();
+
+        historico.forEach((h, idx) => {
+            const idEnvio = h?.id || ('envio-' + cliente.id + '-' + idx);
+            mapa.set(idEnvio, {
+                id: idEnvio,
+                cliente: cliente?.nome || 'Cliente',
+                cidade: cidade || '--',
+                destino: h?.destinoEndereco || cliente?.endereco || '--',
+                status: normalizarStatusPacoteEntrega(h?.status || 'PENDENTE'),
+                distanciaKm: Number.isFinite(Number(h?.distanciaKm)) ? Number(h.distanciaKm) : 0,
+                duracaoMin: Number.isFinite(Number(h?.duracaoMin)) ? Number(h.duracaoMin) : 0,
+                valorFrete: Number.isFinite(Number(h?.valorFrete)) ? Number(h.valorFrete) : parseMoedaParaNumero(h?.valor || 0)
+            });
+        });
+    });
+
+    return mapa;
+}
+
+function formatarTempoCompacto(minutos) {
+    const min = Math.max(0, Math.round(Number(minutos || 0)));
+    if (min < 60) return min + 'min';
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    if (!m) return h + 'h';
+    return h + 'h ' + m + 'm';
+}
+
+function resumirRotaParaEntregador(rota, mapaPacotes, usuarioData = {}) {
+    const pacoteIds = Array.isArray(rota?.pacoteIds) ? rota.pacoteIds : (Array.isArray(rota?.pacotes) ? rota.pacotes : []);
+    const pacotes = pacoteIds.map((id) => mapaPacotes.get(id)).filter(Boolean);
+
+    const totalDist = pacotes.reduce((acc, p) => acc + Number(p?.distanciaKm || 0), 0);
+    const totalDur = pacotes.reduce((acc, p) => acc + Number(p?.duracaoMin || 0), 0);
+    const totalValor = Number.isFinite(Number(rota?.totalFrete))
+        ? Number(rota.totalFrete)
+        : pacotes.reduce((acc, p) => acc + Number(p?.valorFrete || 0), 0);
+
+    const concluidos = pacotes.filter((p) => p.status === 'CONCLUIDO');
+    const cancelados = pacotes.filter((p) => p.status === 'CANCELADO');
+    const restantes = pacotes.filter((p) => p.status !== 'CONCLUIDO' && p.status !== 'CANCELADO');
+
+    const restanteDist = restantes.reduce((acc, p) => acc + Number(p?.distanciaKm || 0), 0);
+    const restanteDur = restantes.reduce((acc, p) => acc + Number(p?.duracaoMin || 0), 0);
+    const valorRestante = restantes.reduce((acc, p) => acc + Number(p?.valorFrete || 0), 0);
+
+    const cidades = [...new Set(pacotes.map((p) => (p?.cidade || '').trim()).filter(Boolean))];
+    const origemCidade = (usuarioData?.endereco?.cidade || '').trim();
+    const origemUf = (usuarioData?.endereco?.uf || usuarioData?.endereco?.estado || '').trim();
+
+    const statusNorm = normalizarStatusRotaFiltro(rota?.status || rota?.pagamentoStatus || 'CRIADA');
+    const progresso = pacotes.length ? Math.round((concluidos.length / pacotes.length) * 100) : 0;
+
+    return {
+        id: rota?.id || '--',
+        statusNorm,
+        statusVisual: getStatusVisualRota(statusNorm),
+        totalPacotes: pacotes.length,
+        concluidos: concluidos.length,
+        cancelados: cancelados.length,
+        restante: restantes.length,
+        totalDist,
+        totalDur,
+        restanteDist,
+        restanteDur,
+        totalValor,
+        valorRestante,
+        origem: origemCidade ? (origemCidade + (origemUf ? ', ' + origemUf : '')) : '--',
+        destino: cidades.length ? cidades.join(' / ') : '--',
+        progresso,
+        pacotes
+    };
+}
+
+function montarCardRotaEntregador(rotaResumo, subtitulo = '') {
+    const statusCor = rotaResumo.statusNorm === 'EM_ROTA'
+        ? 'bg-orange-100 text-orange-600'
+        : (rotaResumo.statusNorm === 'CONCLUIDO' ? 'bg-emerald-100 text-emerald-600' : 'bg-slate-100 text-slate-500');
+
+    const rotaIdEsc = String(rotaResumo.id || '').replace(/'/g, "\\'");
+    const valorTxt = precoParaMoeda(rotaResumo.totalValor || 0);
+
+    return `<button type="button" onclick="abrirModalDetalheRota('${rotaIdEsc}')" class="w-full rounded-2xl border border-slate-200 bg-white p-3 text-left shadow-sm transition active:scale-[0.99]">
+        <div class="flex items-start justify-between gap-2">
+            <div>
+                <p class="text-[13px] font-extrabold text-slate-900">ID: ${rotaResumo.id}</p>
+                <p class="text-[11px] text-slate-500">${subtitulo || (rotaResumo.totalPacotes + ' pacote(s)')}</p>
+            </div>
+            <span class="rounded-full px-2 py-1 text-[10px] font-bold uppercase ${statusCor}">${rotaResumo.statusVisual.label}</span>
+        </div>
+
+        <div class="mt-2 h-[4px] w-full overflow-hidden rounded-full bg-slate-100">
+            <div class="h-full rounded-full bg-flexa-orange transition-all duration-300" style="width:${Math.max(0, Math.min(100, rotaResumo.progresso))}%"></div>
+        </div>
+
+        <div class="mt-2 grid grid-cols-2 gap-2 text-[11px] text-slate-500">
+            <div>
+                <span class="font-semibold text-slate-400">Origem</span>
+                <p class="truncate font-semibold text-slate-700">${rotaResumo.origem}</p>
+            </div>
+            <div>
+                <span class="font-semibold text-slate-400">Destino</span>
+                <p class="truncate font-semibold text-slate-700">${rotaResumo.destino}</p>
+            </div>
+        </div>
+
+        <div class="mt-2 flex items-center justify-between text-[11px] font-semibold text-slate-500">
+            <span>${formatarDistancia(rotaResumo.restanteDist)} • ${formatarTempoCompacto(rotaResumo.restanteDur)}</span>
+            <span class="text-[12px] font-extrabold text-flexa-orange">${valorTxt}</span>
+        </div>
+    </button>`;
+}
+
+function renderizarDashboardEntregador(payloadUsuario = null) {
+    const container = document.getElementById('dash-entregador-content');
+    if (!container) return;
+
+    const dados = payloadUsuario || entregadorHomeCache || window.usuarioLogado || {};
+    const foto = dados?.foto || 'https://via.placeholder.com/110';
+    const cidade = (dados?.endereco?.cidade || 'Maracanau').trim();
+    const uf = (dados?.endereco?.uf || dados?.endereco?.estado || 'CE').trim();
+    const saldo = Number(dados?.financeiro?.saldo || 0);
+
+    const rotasNo = dados?.rotas || {};
+    const clientesNo = dados?.clientes || {};
+    const mapaPacotes = montarMapaPacotesParaEntregador(clientesNo);
+    const listaRotas = Object.keys(rotasNo).map((id) => ({ id, ...(rotasNo[id] || {}) }))
+        .sort((a, b) => Number(b?.atualizadoEm || b?.criadoEm || 0) - Number(a?.atualizadoEm || a?.criadoEm || 0));
+
+    const resumoRotas = listaRotas.map((rota) => resumirRotaParaEntregador(rota, mapaPacotes, dados));
+    const rotasEmRota = resumoRotas.filter((r) => r.statusNorm === 'EM_ROTA');
+    const rotasAIniciar = resumoRotas.filter((r) => r.statusNorm === 'BUSCANDO');
+
+    const rotaAtual = rotasEmRota[0] || rotasAIniciar[0] || resumoRotas[0] || null;
+
+    const restanteDist = rotaAtual ? rotaAtual.restanteDist : 0;
+    const restanteDur = rotaAtual ? rotaAtual.restanteDur : 0;
+    const entregasTxt = rotaAtual ? `${rotaAtual.concluidos}/${Math.max(rotaAtual.totalPacotes, 1)}` : '0/0';
+    const valorReceber = rotaAtual ? (rotaAtual.valorRestante || rotaAtual.totalValor || 0) : 0;
+
+    const cardsEmRota = rotasEmRota.length
+        ? rotasEmRota.map((r) => montarCardRotaEntregador(r, `${r.totalPacotes} pacote(s) em andamento`)).join('')
+        : '<div class="rounded-2xl border border-dashed border-slate-300 bg-white px-3 py-4 text-center text-[12px] font-semibold text-slate-400">Nenhuma rota em andamento agora.</div>';
+
+    const cardsAIniciar = rotasAIniciar.length
+        ? rotasAIniciar.slice(0, 3).map((r) => montarCardRotaEntregador(r, `${r.totalPacotes} pacote(s) aguardando`)).join('')
+        : '<div class="rounded-2xl border border-dashed border-slate-300 bg-white px-3 py-4 text-center text-[12px] font-semibold text-slate-400">Sem rotas para iniciar no momento.</div>';
+
+    const progressoPct = rotaAtual ? Math.max(4, Math.min(100, rotaAtual.progresso || 0)) : 4;
+
+    container.innerHTML = `
+        <div class="pb-28">
+            <div class="mb-3 flex items-center justify-between gap-3">
+                <div class="flex min-w-0 items-center gap-2">
+                    <img src="${foto}" alt="Perfil" class="h-10 w-10 rounded-full border-2 border-white object-cover shadow-sm" />
+                    <div class="min-w-0">
+                        <p class="truncate text-[11px] font-semibold text-slate-400">Localizacao atual</p>
+                        <p class="truncate text-[14px] font-extrabold text-slate-900">${cidade}, ${uf}</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <span class="rounded-full bg-flexa-orange px-3 py-2 text-[12px] font-extrabold text-white">${precoParaMoeda(saldo)}</span>
+                    <button type="button" class="relative inline-flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-sm" aria-label="Notificacoes">
+                        <i data-lucide="bell" class="h-4 w-4 text-slate-700"></i>
+                        <span class="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-500"></span>
+                    </button>
+                </div>
+            </div>
+
+            <div class="mb-3 overflow-hidden rounded-3xl bg-gradient-to-r from-[#ff8b2b] to-[#f58220] p-4 text-white shadow-sm">
+                <p class="text-[12px] font-semibold opacity-90">Banner publicitario</p>
+                <p class="mt-1 text-[20px] font-black leading-5">Mais corridas\nmais ganhos</p>
+                <p class="mt-2 inline-flex rounded-full bg-black/20 px-3 py-1 text-[11px] font-semibold">Area para arte 1080x300</p>
+            </div>
+
+            <div class="mb-3 rounded-3xl bg-white p-3 shadow-sm">
+                <div class="mb-2 grid grid-cols-4 gap-2 text-center">
+                    <div class="rounded-2xl bg-slate-50 px-2 py-2">
+                        <p class="text-[10px] font-semibold text-slate-400">Distancia</p>
+                        <p class="text-[13px] font-extrabold text-slate-800">${formatarDistancia(restanteDist)}</p>
+                    </div>
+                    <div class="rounded-2xl bg-slate-50 px-2 py-2">
+                        <p class="text-[10px] font-semibold text-slate-400">Tempo</p>
+                        <p class="text-[13px] font-extrabold text-slate-800">${formatarTempoCompacto(restanteDur)}</p>
+                    </div>
+                    <div class="rounded-2xl bg-slate-50 px-2 py-2">
+                        <p class="text-[10px] font-semibold text-slate-400">Entregas</p>
+                        <p class="text-[13px] font-extrabold text-emerald-600">${entregasTxt}</p>
+                    </div>
+                    <div class="rounded-2xl bg-slate-50 px-2 py-2">
+                        <p class="text-[10px] font-semibold text-slate-400">A receber</p>
+                        <p class="text-[13px] font-extrabold text-amber-600">${precoParaMoeda(valorReceber)}</p>
+                    </div>
+                </div>
+                <div class="h-[7px] w-full overflow-hidden rounded-full bg-slate-100">
+                    <div class="h-full rounded-full bg-flexa-orange transition-all duration-500" style="width:${progressoPct}%"></div>
+                </div>
+            </div>
+
+            <section class="mb-3">
+                <div class="mb-2 flex items-center justify-between">
+                    <h3 class="text-[16px] font-extrabold text-slate-900">Em rota</h3>
+                    <button type="button" class="text-[12px] font-bold text-flexa-orange" onclick="navegar('view-rotas')">Ver todas</button>
+                </div>
+                <div class="space-y-2">${cardsEmRota}</div>
+            </section>
+
+            <section>
+                <div class="mb-2 flex items-center justify-between">
+                    <h3 class="text-[16px] font-extrabold text-slate-900">Antes de iniciar</h3>
+                    <button type="button" class="text-[12px] font-bold text-flexa-orange" onclick="navegar('view-rotas')">Ver todas</button>
+                </div>
+                <div class="space-y-2">${cardsAIniciar}</div>
+            </section>
+        </div>
+    `;
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}
+
+function pararListenerHomeEntregador() {
+    if (entregadorHomeListenerRef && entregadorHomeListenerCb) {
+        entregadorHomeListenerRef.off('value', entregadorHomeListenerCb);
+    }
+    entregadorHomeListenerRef = null;
+    entregadorHomeListenerCb = null;
+    entregadorHomeListenerUid = null;
+}
+
+function iniciarListenerHomeEntregador() {
+    const uid = getUsuarioIdAtual();
+    if (!uid || obterTipoUsuarioAtual() !== 'entregador') return;
+
+    if (entregadorHomeListenerRef && entregadorHomeListenerUid === uid) {
+        return;
+    }
+
+    pararListenerHomeEntregador();
+
+    const ref = db.ref('usuarios/' + uid);
+    const callback = (snap) => {
+        entregadorHomeCache = snap.val() || {};
+        if (window.usuarioLogado) {
+            window.usuarioLogado = { ...window.usuarioLogado, ...entregadorHomeCache };
+            usuarioLogado = window.usuarioLogado;
+        }
+
+        if (document.getElementById('view-dash-entregador')?.classList.contains('active')) {
+            renderizarDashboardEntregador(window.usuarioLogado || entregadorHomeCache || {});
+        }
+    };
+
+    ref.on('value', callback);
+    entregadorHomeListenerRef = ref;
+    entregadorHomeListenerCb = callback;
+    entregadorHomeListenerUid = uid;
+}
+
