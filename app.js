@@ -43,6 +43,7 @@ let entregadorHomeListenerRef = null;
 let entregadorHomeListenerCb = null;
 let entregadorHomeListenerUid = null;
 let entregadorHomeCache = null;
+let entregadorMetaDiaCache = null;
 let rotasMarketplaceEntregadorCache = [];
 let filtroRotaEntregadorOrigem = 'TODAS';
 let filtroRotaEntregadorDestino = 'TODAS';
@@ -1963,6 +1964,18 @@ async function loginReal() {
             return;
         }
 
+        const tipoContaRaw = normalizarTexto(dadosUser?.tipo || 'loja');
+        const contaEhEntregador = (tipoContaRaw === 'entregador' || tipoContaRaw === 'entrega');
+        const esperadoEhEntregador = tipoCadastroSelecionado === 'entrega';
+
+        if (contaEhEntregador !== esperadoEhEntregador) {
+            await auth.signOut();
+            alert(contaEhEntregador
+                ? 'Essa conta e de entregador. Entre pela opcao Fazer entregas.'
+                : 'Essa conta e de lojista. Entre pela opcao Enviar pacotes.');
+            return;
+        }
+
         usuarioLogado = { id: cred.user.uid, ...dadosUser };
         window.usuarioLogado = usuarioLogado;
         localStorage.setItem('flexa_session', JSON.stringify(usuarioLogado));
@@ -2260,7 +2273,7 @@ function renderizarDashboard(user) {
     container.innerHTML = `
         <div class="home-screen">
             <header class="home-brand-row">
-                <div class="home-logo">FLEX<span>A</span></div>
+                <img src="img/logoflexa.png" alt="Flexa" class="home-flexa-logo-img">
                 <button type="button" class="home-bell-btn" onclick="navegar('view-rotas')">
                     <i data-lucide="bell"></i>
                     <span class="home-bell-dot"></span>
@@ -2606,6 +2619,8 @@ async function carregarMarketplaceRotasEntregador() {
                     statusNorm,
                     statusVisual,
                     servicoLabel,
+                    entregadorId: String(rota?.entregadorId || rota?.aceitoPor || ''),
+                    pacoteIds,
                     criadoEm: Number(rota?.criadoEm || 0)
                 });
             });
@@ -2642,6 +2657,11 @@ function montarCardMarketplaceRotaEntregador(rota) {
     const precoTxt = precoParaMoeda(Number(rota?.totalFrete || 0));
     const statusClass = String(rota?.statusVisual?.className || '').replace('rota-main-status ', '');
 
+    const idEsc = String(rota?.id || '').replace(/'/g, "\\'");
+    const lojistaUidEsc = String(rota?.lojistaUid || '').replace(/'/g, "\\'");
+    const rotaDisponivel = rota?.statusNorm === 'BUSCANDO' && !String(rota?.entregadorId || '').trim();
+    const textoBotao = rotaDisponivel ? 'Aceitar' : (rota?.statusNorm === 'EM_ROTA' ? 'Em rota' : 'Indisponivel');
+
     return `
         <article class="entregador-rota-card">
             <div class="entregador-rota-avatar"><i data-lucide="package"></i></div>
@@ -2651,14 +2671,14 @@ function montarCardMarketplaceRotaEntregador(rota) {
                 <div class="entregador-rota-meta">${escaparHtmlMarketplace(rota.origemLabel)} → ${escaparHtmlMarketplace(rota.destinoPrincipal)} • ${formatarDistancia(rota.distanciaTotal)} • ${formatarDuracao(rota.duracaoTotal)}</div>
                 <div class="entregador-rota-meta">Rota ${escaparHtmlMarketplace(rota.id)} • ${Number(rota.totalPacotes || 0)} pacote(s)</div>
             </div>
-            <div>
+            <div class="entregador-rota-actions">
                 <span class="entregador-rota-status ${escaparHtmlMarketplace(statusClass)}">${escaparHtmlMarketplace(rota?.statusVisual?.label || 'BUSCANDO')}</span>
                 <div class="entregador-rota-preco">${escaparHtmlMarketplace(precoTxt)}</div>
+                <button type="button" class="entregador-rota-accept-btn" ${rotaDisponivel ? '' : 'disabled'} onclick="aceitarRotaMarketplaceEntregador('${lojistaUidEsc}', '${idEsc}', this)">${textoBotao}</button>
             </div>
         </article>
     `;
 }
-
 function montarOptionsFiltroMarketplace(cidades, valorAtual, labelPadrao) {
     const atualNorm = (valorAtual || 'TODAS').toString();
     const opcoes = ['TODAS', ...cidades];
@@ -2702,6 +2722,112 @@ function limparFiltrosRotaEntregador() {
     atualizarListaMarketplaceRotasEntregador();
 }
 
+async function aceitarRotaMarketplaceEntregador(lojistaUid, rotaId, btn = null) {
+    if (!usuarioEhEntregador()) {
+        alert('Somente entregador pode aceitar rota.');
+        return;
+    }
+
+    const uidEntregador = getUsuarioIdAtual();
+    if (!uidEntregador) {
+        alert('Sessao expirada. Faca login novamente.');
+        return;
+    }
+
+    if (!lojistaUid || !rotaId) return;
+
+    const textoOriginal = btn ? btn.innerText : '';
+    if (btn) {
+        btn.disabled = true;
+        btn.innerText = 'Aceitando...';
+    }
+
+    try {
+        const rotaRef = db.ref(`usuarios/${lojistaUid}/rotas/${rotaId}`);
+        const metaEntregador = {
+            entregadorId: uidEntregador,
+            entregadorNome: (window.usuarioLogado?.nome || 'Entregador').toString(),
+            entregadorFoto: (window.usuarioLogado?.foto || '').toString(),
+            aceitoPor: uidEntregador,
+            aceitoEm: Date.now(),
+            status: 'EM_ROTA',
+            atualizadoEm: Date.now()
+        };
+
+        const tx = await rotaRef.transaction((atual) => {
+            if (!atual) return atual;
+            const statusAtual = normalizarStatusRotaFiltro(atual?.status || atual?.pagamentoStatus || 'CRIADA');
+            const jaTemEntregador = Boolean(atual?.entregadorId || atual?.aceitoPor);
+            if (statusAtual !== 'BUSCANDO' || jaTemEntregador) return;
+            return { ...atual, ...metaEntregador };
+        });
+
+        if (!tx.committed || !tx.snapshot.exists()) {
+            alert('Essa rota ja foi aceita por outro entregador.');
+            await renderRotasMarketplaceEntregador(true);
+            return;
+        }
+
+        const rotaAtualizada = tx.snapshot.val() || {};
+        const pacoteIds = Array.isArray(rotaAtualizada?.pacoteIds)
+            ? rotaAtualizada.pacoteIds
+            : (Array.isArray(rotaAtualizada?.pacotes) ? rotaAtualizada.pacotes : []);
+
+        if (pacoteIds.length) {
+            const clientesSnap = await db.ref(`usuarios/${lojistaUid}/clientes`).once('value');
+            const clientesNo = clientesSnap.val() || {};
+            const idsSet = new Set(pacoteIds.map((id) => String(id)));
+            const updates = {};
+
+            Object.keys(clientesNo).forEach((clienteId) => {
+                const historico = Array.isArray(clientesNo[clienteId]?.historico) ? clientesNo[clienteId].historico : [];
+                historico.forEach((h, idx) => {
+                    const idAtual = String(h?.id || ('envio-' + clienteId + '-' + idx));
+                    if (!idsSet.has(idAtual)) return;
+                    updates[`usuarios/${lojistaUid}/clientes/${clienteId}/historico/${idx}/id`] = idAtual;
+                    updates[`usuarios/${lojistaUid}/clientes/${clienteId}/historico/${idx}/status`] = 'EM_ROTA';
+                    updates[`usuarios/${lojistaUid}/clientes/${clienteId}/historico/${idx}/rotaId`] = String(rotaId);
+                    updates[`usuarios/${lojistaUid}/clientes/${clienteId}/historico/${idx}/atualizadoEm`] = Date.now();
+                });
+            });
+
+            if (Object.keys(updates).length) {
+                await db.ref().update(updates);
+            }
+        }
+
+        const rotaNoEntregador = {
+            id: String(rotaId),
+            ...rotaAtualizada,
+            origemLojistaUid: String(lojistaUid),
+            sincronizadaDoLojista: true,
+            atualizadoEm: Date.now()
+        };
+        await db.ref(`usuarios/${uidEntregador}/rotas/${rotaId}`).set(rotaNoEntregador);
+
+        rotasMarketplaceEntregadorCache = rotasMarketplaceEntregadorCache.map((r) => {
+            if (String(r.id) !== String(rotaId) || String(r.lojistaUid) !== String(lojistaUid)) return r;
+            return {
+                ...r,
+                statusNorm: 'EM_ROTA',
+                statusVisual: getStatusVisualRota('EM_ROTA'),
+                entregadorId: uidEntregador
+            };
+        });
+
+        atualizarListaMarketplaceRotasEntregador();
+        iniciarListenerHomeEntregador();
+        alert('Rota aceita com sucesso.');
+    } catch (err) {
+        console.warn('Erro ao aceitar rota marketplace:', err);
+        alert('Nao foi possivel aceitar essa rota agora. Tente novamente.');
+    } finally {
+        if (btn) {
+            btn.disabled = false;
+            btn.innerText = textoOriginal || 'Aceitar';
+        }
+    }
+}
 async function renderRotasMarketplaceEntregador(forceReload = false) {
     const shell = document.getElementById('entregador-rotas-shell');
     if (!shell || !usuarioEhEntregador()) return;
@@ -2728,7 +2854,7 @@ async function renderRotasMarketplaceEntregador(forceReload = false) {
     shell.innerHTML = `
         <div class="entregador-rotas-screen">
             <div class="entregador-rotas-top">
-                <div class="entregador-rotas-logo" aria-label="Flexa"><span>FLEX</span><span class="accent">A</span></div>
+                <img src="img/logoflexa.png" alt="Flexa" class="entregador-rotas-logo-img">
                 <div class="entregador-rotas-wallet">
                     <strong>${precoParaMoeda(saldo)}</strong>
                     <img src="${escaparHtmlMarketplace(foto)}" alt="Usuario" class="entregador-rotas-wallet-avatar">
@@ -5563,12 +5689,90 @@ function formatarTempoCompacto(minutos) {
     return h + 'h ' + m + 'm';
 }
 
+function formatarTempoPainel(minutos) {
+    const min = Math.max(0, Math.round(Number(minutos || 0)));
+    const h = Math.floor(min / 60);
+    const m = min % 60;
+    return `${h}:${String(m).padStart(2, '0')}h`;
+}
+
+function obterInicioDiaLocal(ts = Date.now()) {
+    const data = new Date(Number(ts || Date.now()));
+    data.setHours(0, 0, 0, 0);
+    return data.getTime();
+}
+
+function obterMetaDiaEntregador(dadosUsuario = {}) {
+    const noMeta = dadosUsuario?.entregadorMetaDia || {};
+    const inicioPadrao = obterInicioDiaLocal(Date.now());
+    const inicioEm = Number(noMeta?.inicioEm || inicioPadrao);
+    const alvoPacotes = Math.max(1, Number(noMeta?.alvoPacotes || 20));
+    const alvoGanhos = Math.max(1, Number(noMeta?.alvoGanhos || 150));
+
+    return {
+        inicioEm,
+        alvoPacotes,
+        alvoGanhos
+    };
+}
+
+function calcularResumoDiaEntregador(resumoRotas = [], metaDia = null) {
+    const meta = metaDia || obterMetaDiaEntregador(window.usuarioLogado || {});
+    const inicioEm = Number(meta?.inicioEm || obterInicioDiaLocal(Date.now()));
+    const fimEm = Date.now();
+
+    const rotasDoPeriodo = resumoRotas.filter((rota) => {
+        const tsRota = Number(rota?.dataRef || 0);
+        return tsRota >= inicioEm && tsRota <= fimEm;
+    });
+
+    const totalPacotesConcluidos = rotasDoPeriodo.reduce((acc, rota) => acc + Number(rota?.concluidos || 0), 0);
+
+    const ganhosConcluidos = rotasDoPeriodo.reduce((acc, rota) => {
+        const concluido = Number(rota?.concluidos || 0);
+        const totalPacotes = Math.max(1, Number(rota?.totalPacotes || 1));
+        const proporcao = Math.max(0, Math.min(1, concluido / totalPacotes));
+        return acc + (Number(rota?.totalValor || 0) * proporcao);
+    }, 0);
+
+    const distanciaConcluida = rotasDoPeriodo.reduce((acc, rota) => {
+        const concluido = Number(rota?.concluidos || 0);
+        const totalPacotes = Math.max(1, Number(rota?.totalPacotes || 1));
+        const proporcao = Math.max(0, Math.min(1, concluido / totalPacotes));
+        return acc + (Number(rota?.totalDist || 0) * proporcao);
+    }, 0);
+
+    const tempoConcluido = rotasDoPeriodo.reduce((acc, rota) => {
+        const concluido = Number(rota?.concluidos || 0);
+        const totalPacotes = Math.max(1, Number(rota?.totalPacotes || 1));
+        const proporcao = Math.max(0, Math.min(1, concluido / totalPacotes));
+        return acc + (Number(rota?.totalDur || 0) * proporcao);
+    }, 0);
+
+    const progressoPacotes = Math.max(0, Math.min(100, Math.round((totalPacotesConcluidos / Math.max(1, meta.alvoPacotes)) * 100)));
+    const progressoGanhos = Math.max(0, Math.min(100, Math.round((ganhosConcluidos / Math.max(1, meta.alvoGanhos)) * 100)));
+    const progressoGeral = Math.round((progressoPacotes + progressoGanhos) / 2);
+
+    return {
+        inicioEm,
+        totalPacotesConcluidos,
+        ganhosConcluidos,
+        distanciaConcluida,
+        tempoConcluido,
+        progressoPacotes,
+        progressoGanhos,
+        progressoGeral
+    };
+}
+
 function resumirRotaParaEntregador(rota, mapaPacotes, usuarioData = {}) {
     const pacoteIds = Array.isArray(rota?.pacoteIds) ? rota.pacoteIds : (Array.isArray(rota?.pacotes) ? rota.pacotes : []);
     const pacotes = pacoteIds.map((id) => mapaPacotes.get(id)).filter(Boolean);
 
-    const totalDist = pacotes.reduce((acc, p) => acc + Number(p?.distanciaKm || 0), 0);
-    const totalDur = pacotes.reduce((acc, p) => acc + Number(p?.duracaoMin || 0), 0);
+    const totalDistPacotes = pacotes.reduce((acc, p) => acc + Number(p?.distanciaKm || 0), 0);
+    const totalDurPacotes = pacotes.reduce((acc, p) => acc + Number(p?.duracaoMin || 0), 0);
+    const totalDist = Number.isFinite(Number(rota?.distanciaTotal)) ? Number(rota.distanciaTotal) : totalDistPacotes;
+    const totalDur = Number.isFinite(Number(rota?.duracaoTotal)) ? Number(rota.duracaoTotal) : totalDurPacotes;
     const totalValor = Number.isFinite(Number(rota?.totalFrete))
         ? Number(rota.totalFrete)
         : pacotes.reduce((acc, p) => acc + Number(p?.valorFrete || 0), 0);
@@ -5577,25 +5781,38 @@ function resumirRotaParaEntregador(rota, mapaPacotes, usuarioData = {}) {
     const cancelados = pacotes.filter((p) => p.status === 'CANCELADO');
     const restantes = pacotes.filter((p) => p.status !== 'CONCLUIDO' && p.status !== 'CANCELADO');
 
-    const restanteDist = restantes.reduce((acc, p) => acc + Number(p?.distanciaKm || 0), 0);
-    const restanteDur = restantes.reduce((acc, p) => acc + Number(p?.duracaoMin || 0), 0);
-    const valorRestante = restantes.reduce((acc, p) => acc + Number(p?.valorFrete || 0), 0);
+    const statusNorm = normalizarStatusRotaFiltro(rota?.status || rota?.pagamentoStatus || 'CRIADA');
+    const totalPacotesRota = Math.max(0, Number(rota?.quantidade || pacotes.length || 0));
+    const concluidosCount = pacotes.length
+        ? concluidos.length
+        : (statusNorm === 'CONCLUIDO' ? totalPacotesRota : 0);
+    const restantesCount = Math.max(0, totalPacotesRota - concluidosCount - cancelados.length);
+
+    const restanteDist = pacotes.length
+        ? restantes.reduce((acc, p) => acc + Number(p?.distanciaKm || 0), 0)
+        : (statusNorm === 'CONCLUIDO' ? 0 : totalDist);
+    const restanteDur = pacotes.length
+        ? restantes.reduce((acc, p) => acc + Number(p?.duracaoMin || 0), 0)
+        : (statusNorm === 'CONCLUIDO' ? 0 : totalDur);
+    const valorRestante = pacotes.length
+        ? restantes.reduce((acc, p) => acc + Number(p?.valorFrete || 0), 0)
+        : (statusNorm === 'CONCLUIDO' ? 0 : totalValor);
 
     const cidades = [...new Set(pacotes.map((p) => (p?.cidade || '').trim()).filter(Boolean))];
     const origemCidade = (usuarioData?.endereco?.cidade || '').trim();
     const origemUf = (usuarioData?.endereco?.uf || usuarioData?.endereco?.estado || '').trim();
 
-    const statusNorm = normalizarStatusRotaFiltro(rota?.status || rota?.pagamentoStatus || 'CRIADA');
-    const progresso = pacotes.length ? Math.round((concluidos.length / pacotes.length) * 100) : 0;
+    const progresso = totalPacotesRota ? Math.round((concluidosCount / totalPacotesRota) * 100) : 0;
+    const dataRef = Number(rota?.aceitoEm || rota?.atualizadoEm || rota?.criadoEm || Date.now());
 
     return {
         id: rota?.id || '--',
         statusNorm,
         statusVisual: getStatusVisualRota(statusNorm),
-        totalPacotes: pacotes.length,
-        concluidos: concluidos.length,
+        totalPacotes: totalPacotesRota,
+        concluidos: concluidosCount,
         cancelados: cancelados.length,
-        restante: restantes.length,
+        restante: restantesCount,
         totalDist,
         totalDur,
         restanteDist,
@@ -5605,6 +5822,7 @@ function resumirRotaParaEntregador(rota, mapaPacotes, usuarioData = {}) {
         origem: origemCidade ? (origemCidade + (origemUf ? ', ' + origemUf : '')) : '--',
         destino: cidades.length ? cidades.join(' / ') : '--',
         progresso,
+        dataRef,
         pacotes
     };
 }
@@ -5653,10 +5871,8 @@ function renderizarDashboardEntregador(payloadUsuario = null) {
     if (!container) return;
 
     const dados = payloadUsuario || entregadorHomeCache || window.usuarioLogado || {};
-    const foto = dados?.foto || 'https://via.placeholder.com/110';
-    const cidade = (dados?.endereco?.cidade || 'Maracanau').trim();
-    const uf = (dados?.endereco?.uf || dados?.endereco?.estado || 'CE').trim();
     const saldo = Number(dados?.financeiro?.saldo || 0);
+    const metaDia = obterMetaDiaEntregador(dados);
 
     const rotasNo = dados?.rotas || {};
     const clientesNo = dados?.clientes || {};
@@ -5669,11 +5885,8 @@ function renderizarDashboardEntregador(payloadUsuario = null) {
     const rotasAIniciar = resumoRotas.filter((r) => r.statusNorm === 'BUSCANDO');
 
     const rotaAtual = rotasEmRota[0] || rotasAIniciar[0] || resumoRotas[0] || null;
-
-    const restanteDist = rotaAtual ? rotaAtual.restanteDist : 0;
-    const restanteDur = rotaAtual ? rotaAtual.restanteDur : 0;
-    const entregasTxt = rotaAtual ? `${rotaAtual.concluidos}/${Math.max(rotaAtual.totalPacotes, 1)}` : '0/0';
-    const valorReceber = rotaAtual ? (rotaAtual.valorRestante || rotaAtual.totalValor || 0) : 0;
+    const resumoDia = calcularResumoDiaEntregador(resumoRotas, metaDia);
+    entregadorMetaDiaCache = { ...resumoDia, ...metaDia };
 
     const cardsEmRota = rotasEmRota.length
         ? rotasEmRota.map((r) => montarCardRotaEntregador(r, `${r.totalPacotes} pacote(s) em andamento`)).join('')
@@ -5683,20 +5896,14 @@ function renderizarDashboardEntregador(payloadUsuario = null) {
         ? rotasAIniciar.slice(0, 3).map((r) => montarCardRotaEntregador(r, `${r.totalPacotes} pacote(s) aguardando`)).join('')
         : '<div class="rounded-2xl border border-dashed border-slate-300 bg-white px-3 py-4 text-center text-[12px] font-semibold text-slate-400">Sem rotas para iniciar no momento.</div>';
 
-    const progressoPct = rotaAtual ? Math.max(4, Math.min(100, rotaAtual.progresso || 0)) : 4;
+    const progressoPct = Math.max(4, Math.min(100, resumoDia.progressoGeral || (rotaAtual ? rotaAtual.progresso : 0)));
 
     container.innerHTML = `
         <div class="pb-28">
             <div class="mb-3 flex items-center justify-between gap-3">
-                <div class="flex min-w-0 items-center gap-2">
-                    <img src="${foto}" alt="Perfil" class="h-10 w-10 rounded-full border-2 border-white object-cover shadow-sm" />
-                    <div class="min-w-0">
-                        <p class="truncate text-[11px] font-semibold text-slate-400">Localizacao atual</p>
-                        <p class="truncate text-[14px] font-extrabold text-slate-900">${cidade}, ${uf}</p>
-                    </div>
-                </div>
+                <img src="img/logoflexa.png" alt="Flexa" class="home-flexa-logo-img">
                 <div class="flex items-center gap-2">
-                    <span class="rounded-full bg-flexa-orange px-3 py-2 text-[12px] font-extrabold text-white">${precoParaMoeda(saldo)}</span>
+                    <span class="entregador-saldo-chip">${precoParaMoeda(saldo)}</span>
                     <button type="button" class="relative inline-flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-sm" aria-label="Notificacoes">
                         <i data-lucide="bell" class="h-4 w-4 text-slate-700"></i>
                         <span class="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-500"></span>
@@ -5704,33 +5911,44 @@ function renderizarDashboardEntregador(payloadUsuario = null) {
                 </div>
             </div>
 
-            <div class="mb-3 overflow-hidden rounded-3xl bg-gradient-to-r from-[#ff8b2b] to-[#f58220] p-4 text-white shadow-sm">
-                <p class="text-[12px] font-semibold opacity-90">Banner publicitario</p>
-                <p class="mt-1 text-[20px] font-black leading-5">Mais corridas\nmais ganhos</p>
-                <p class="mt-2 inline-flex rounded-full bg-black/20 px-3 py-1 text-[11px] font-semibold">Area para arte 1080x300</p>
+            <div class="mb-3 overflow-hidden rounded-2xl bg-white shadow-sm">
+                <img src="img/banner1.png" alt="Banner Flexa" class="h-auto w-full object-cover" onerror="this.style.display='none'">
             </div>
 
-            <div class="mb-3 rounded-3xl bg-white p-3 shadow-sm">
-                <div class="mb-2 grid grid-cols-4 gap-2 text-center">
-                    <div class="rounded-2xl bg-slate-50 px-2 py-2">
-                        <p class="text-[10px] font-semibold text-slate-400">Distancia</p>
-                        <p class="text-[13px] font-extrabold text-slate-800">${formatarDistancia(restanteDist)}</p>
-                    </div>
-                    <div class="rounded-2xl bg-slate-50 px-2 py-2">
-                        <p class="text-[10px] font-semibold text-slate-400">Tempo</p>
-                        <p class="text-[13px] font-extrabold text-slate-800">${formatarTempoCompacto(restanteDur)}</p>
-                    </div>
-                    <div class="rounded-2xl bg-slate-50 px-2 py-2">
-                        <p class="text-[10px] font-semibold text-slate-400">Entregas</p>
-                        <p class="text-[13px] font-extrabold text-emerald-600">${entregasTxt}</p>
-                    </div>
-                    <div class="rounded-2xl bg-slate-50 px-2 py-2">
-                        <p class="text-[10px] font-semibold text-slate-400">A receber</p>
-                        <p class="text-[13px] font-extrabold text-amber-600">${precoParaMoeda(valorReceber)}</p>
-                    </div>
+            <div class="mb-3 rounded-3xl bg-white p-3 shadow-sm entregador-dia-card">
+                <div class="dash-meta-head">
+                    <div class="dash-meta-title">• Meta do dia (${Math.max(0, Math.min(100, progressoPct))}% concluido)</div>
+                    <button type="button" class="dash-meta-link" onclick="abrirModalMetaDiaEntregador()">Ver mais</button>
                 </div>
-                <div class="h-[7px] w-full overflow-hidden rounded-full bg-slate-100">
-                    <div class="h-full rounded-full bg-flexa-orange transition-all duration-500" style="width:${progressoPct}%"></div>
+
+                <div class="dash-meta-progress-track">
+                    <div class="dash-meta-progress-fill" style="width:${progressoPct}%"></div>
+                </div>
+
+                <div class="dash-meta-grid">
+                    <div class="dash-meta-item dash-meta-item-azul">
+                        <span class="dash-meta-icon"><i data-lucide="map-pin" size="15"></i></span>
+                        <small>Percorrido</small>
+                        <strong>${Math.round(Number(resumoDia.distanciaConcluida || 0))} km</strong>
+                    </div>
+
+                    <div class="dash-meta-item dash-meta-item-laranja">
+                        <span class="dash-meta-icon"><i data-lucide="clock-3" size="15"></i></span>
+                        <small>Em rota</small>
+                        <strong>${formatarTempoPainel(resumoDia.tempoConcluido)}</strong>
+                    </div>
+
+                    <div class="dash-meta-item dash-meta-item-verde">
+                        <span class="dash-meta-icon"><i data-lucide="package-check" size="15"></i></span>
+                        <small>Entregas</small>
+                        <strong>${resumoDia.totalPacotesConcluidos}/${Math.max(1, metaDia.alvoPacotes)}</strong>
+                    </div>
+
+                    <div class="dash-meta-item dash-meta-item-amarelo">
+                        <span class="dash-meta-icon"><i data-lucide="wallet" size="15"></i></span>
+                        <small>A receber</small>
+                        <strong>${precoParaMoeda(Number(resumoDia.ganhosConcluidos || 0))}</strong>
+                    </div>
                 </div>
             </div>
 
@@ -5755,6 +5973,51 @@ function renderizarDashboardEntregador(payloadUsuario = null) {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }
 
+function abrirModalMetaDiaEntregador() {
+    const meta = entregadorMetaDiaCache || {};
+    const inicioDiaTxt = Number(meta.inicioEm) ? new Date(meta.inicioEm).toLocaleString('pt-BR') : '--';
+    const html = `
+        <div class="info-card">
+            <h4>Meta da jornada</h4>
+            <p><strong>Inicio do expediente:</strong> ${inicioDiaTxt}</p>
+            <p><strong>Ganhos concluidos:</strong> ${precoParaMoeda(Number(meta.ganhosConcluidos || 0))}</p>
+            <p><strong>Pacotes entregues:</strong> ${Number(meta.totalPacotesConcluidos || 0)} / ${Math.max(1, Number(meta.alvoPacotes || 20))}</p>
+            <p><strong>Distancia percorrida:</strong> ${formatarDistancia(Number(meta.distanciaConcluida || 0))}</p>
+            <p><strong>Tempo em rota:</strong> ${formatarTempoCompacto(Number(meta.tempoConcluido || 0))}</p>
+        </div>
+        <button type="button" class="btn-main" style="margin-top: 8px;" onclick="zerarMetaDiaEntregador()">Zerar meta do dia</button>
+    `;
+    abrirModalInfoPerfil('Meta do dia', html);
+}
+
+async function zerarMetaDiaEntregador() {
+    const uid = getUsuarioIdAtual();
+    if (!uid || !usuarioEhEntregador()) return;
+
+    const confirmar = confirm('Finalizar expediente e zerar os contadores do dia?');
+    if (!confirmar) return;
+
+    const metaAtual = entregadorMetaDiaCache || {};
+    const agora = Date.now();
+    const historicoPayload = {
+        inicioEm: Number(metaAtual.inicioEm || obterInicioDiaLocal(agora)),
+        finalizadoEm: agora,
+        ganhosConcluidos: Number(metaAtual.ganhosConcluidos || 0),
+        pacotesConcluidos: Number(metaAtual.totalPacotesConcluidos || 0),
+        distanciaConcluidaKm: Number(metaAtual.distanciaConcluida || 0),
+        tempoConcluidoMin: Number(metaAtual.tempoConcluido || 0)
+    };
+
+    await db.ref(`usuarios/${uid}/metaDiaHistorico`).push(historicoPayload);
+    await db.ref(`usuarios/${uid}/entregadorMetaDia`).update({
+        inicioEm: agora,
+        alvoPacotes: Math.max(1, Number(metaAtual.alvoPacotes || 20)),
+        alvoGanhos: Math.max(1, Number(metaAtual.alvoGanhos || 150)),
+        atualizadoEm: agora
+    });
+
+    fecharModalInfoPerfil();
+}
 function pararListenerHomeEntregador() {
     if (entregadorHomeListenerRef && entregadorHomeListenerCb) {
         entregadorHomeListenerRef.off('value', entregadorHomeListenerCb);
@@ -5792,4 +6055,13 @@ function iniciarListenerHomeEntregador() {
     entregadorHomeListenerCb = callback;
     entregadorHomeListenerUid = uid;
 }
+
+
+
+
+
+
+
+
+
 
