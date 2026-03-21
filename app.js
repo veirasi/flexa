@@ -2796,10 +2796,14 @@ async function aceitarRotaMarketplaceEntregador(lojistaUid, rotaId, btn = null) 
             }
         }
 
+        const rotaMarketplaceAtual = rotasMarketplaceEntregadorCache.find((r) => String(r.id) === String(rotaId) && String(r.lojistaUid) === String(lojistaUid));
         const rotaNoEntregador = {
             id: String(rotaId),
             ...rotaAtualizada,
             origemLojistaUid: String(lojistaUid),
+            lojistaId: String(lojistaUid),
+            lojistaNome: String(rotaAtualizada?.lojistaNome || rotaMarketplaceAtual?.lojistaNome || 'Lojista'),
+            lojistaFoto: String(rotaAtualizada?.lojistaFoto || rotaMarketplaceAtual?.lojistaFoto || ''),
             sincronizadaDoLojista: true,
             atualizadoEm: Date.now()
         };
@@ -4953,17 +4957,32 @@ async function carregarChatsAtivos() {
     const chatsData = snapChats?.val() || {};
 
     const conversas = [];
-    rotas.forEach((rota) => {
-        if (!rotaTemEntregadorAtivoParaChat(rota)) return;
+    const cacheLojistaNome = {};
+
+    for (const rota of rotas) {
+        if (!rotaTemEntregadorAtivoParaChat(rota)) continue;
 
         const abertos = obterPacotesAbertosRotaParaChat(rota);
-        if (abertos <= 0) return;
+        if (abertos <= 0) continue;
 
         const chatId = `rota_${sanitizeFirebaseKey(rota.id)}`;
         const chatData = chatsData[chatId] || {};
         const ultimaMsg = obterUltimaMensagemResumo(chatData);
         const meta = chatData.meta || {};
         const participante = obterParticipanteChatDaRota(rota, meta);
+
+        if (usuarioEhEntregador() && participante.id && (!participante.nome || participante.nome === 'Lojista')) {
+            if (!cacheLojistaNome[participante.id]) {
+                const snapLojista = await db.ref(`usuarios/${participante.id}`).once('value').catch(() => null);
+                const dadosLojista = snapLojista?.val() || {};
+                cacheLojistaNome[participante.id] = {
+                    nome: String(dadosLojista?.nome || 'Lojista'),
+                    foto: String(dadosLojista?.foto || '')
+                };
+            }
+            participante.nome = cacheLojistaNome[participante.id].nome;
+            participante.foto = participante.foto || cacheLojistaNome[participante.id].foto;
+        }
 
         conversas.push({
             chatId,
@@ -4977,7 +4996,7 @@ async function carregarChatsAtivos() {
             ultimaMensagemEm: Number(meta.ultimaMensagemEm || ultimaMsg.criadoEm || rota.atualizadoEm || rota.criadoEm || 0),
             atualizadoEm: Number(rota.atualizadoEm || rota.criadoEm || 0)
         });
-    });
+    }
 
     conversas.sort((a, b) => Number(b.ultimaMensagemEm || b.atualizadoEm || 0) - Number(a.ultimaMensagemEm || a.atualizadoEm || 0));
     chatConversasCache = conversas;
@@ -6096,6 +6115,9 @@ function iniciarListenerHomeEntregador() {
     entregadorHomeListenerCb = callback;
     entregadorHomeListenerUid = uid;
 }
+
+
+
 
 
 
