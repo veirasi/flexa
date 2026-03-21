@@ -4824,6 +4824,35 @@ function obterEntregadorDaRota(rota) {
     };
 }
 
+function obterParticipanteChatDaRota(rota, meta = {}) {
+    const euEntregador = usuarioEhEntregador();
+    if (euEntregador) {
+        return {
+            id: String(rota?.origemLojistaUid || rota?.lojistaUid || meta?.lojistaId || ''),
+            nome: String(rota?.lojistaNome || meta?.lojistaNome || 'Lojista'),
+            foto: String(rota?.lojistaFoto || meta?.lojistaFoto || ''),
+            tipo: 'LOJISTA'
+        };
+    }
+
+    const entregador = obterEntregadorDaRota(rota);
+    return {
+        id: String(entregador.id || meta?.entregadorId || ''),
+        nome: String(meta?.entregadorNome || entregador.nome || 'Entregador'),
+        foto: String(meta?.entregadorFoto || entregador.foto || ''),
+        tipo: 'ENTREGADOR'
+    };
+}
+
+function obterPacotesAbertosRotaParaChat(rota) {
+    const pacotes = getPacotesDaRota(rota);
+    if (pacotes.length) {
+        return pacotes.filter((p) => pacoteAbertoParaChat(p)).length;
+    }
+    const statusRota = normalizarStatusRotaFiltro(rota?.status || rota?.pagamentoStatus || 'CRIADA');
+    if (statusRota === 'CONCLUIDO' || statusRota === 'CANCELADO') return 0;
+    return Math.max(0, Number(rota?.quantidade || 0));
+}
 function rotaTemEntregadorAtivoParaChat(rota) {
     const statusRota = normalizarStatusRotaFiltro(rota?.status || rota?.pagamentoStatus || 'CRIADA');
     if (statusRota !== 'EM_ROTA') return false;
@@ -4887,16 +4916,16 @@ function renderListaChats() {
     }
 
     listEl.innerHTML = chatConversasCache.map((c) => {
-        const foto = c.entregadorFoto
-            ? `<img src="${escapeHtmlChat(c.entregadorFoto)}" alt="${escapeHtmlChat(c.entregadorNome)}">`
-            : `<span>${escapeHtmlChat(gerarIniciais(c.entregadorNome))}</span>`;
+        const foto = c.participanteFoto
+            ? `<img src="${escapeHtmlChat(c.participanteFoto)}" alt="${escapeHtmlChat(c.participanteNome)}">`
+            : `<span>${escapeHtmlChat(gerarIniciais(c.participanteNome))}</span>`;
 
         return `
             <button type="button" class="chat-list-item" onclick="abrirThreadChat('${escapeHtmlChat(c.chatId)}')">
                 <div class="chat-list-avatar">${foto}</div>
                 <div class="chat-list-content">
                     <div class="chat-list-top">
-                        <strong>${escapeHtmlChat(c.entregadorNome)}</strong>
+                        <strong>${escapeHtmlChat(c.participanteNome)}</strong>
                         <small>${formatarHoraChat(c.ultimaMensagemEm)}</small>
                     </div>
                     <div class="chat-list-mid">Rota ${escapeHtmlChat(c.rotaId)} • ${c.pacotesAbertos} pacote(s) em aberto</div>
@@ -4927,22 +4956,22 @@ async function carregarChatsAtivos() {
     rotas.forEach((rota) => {
         if (!rotaTemEntregadorAtivoParaChat(rota)) return;
 
-        const pacotes = getPacotesDaRota(rota);
-        const abertos = pacotes.filter((p) => pacoteAbertoParaChat(p)).length;
+        const abertos = obterPacotesAbertosRotaParaChat(rota);
         if (abertos <= 0) return;
 
-        const entregador = obterEntregadorDaRota(rota);
         const chatId = `rota_${sanitizeFirebaseKey(rota.id)}`;
         const chatData = chatsData[chatId] || {};
         const ultimaMsg = obterUltimaMensagemResumo(chatData);
         const meta = chatData.meta || {};
+        const participante = obterParticipanteChatDaRota(rota, meta);
 
         conversas.push({
             chatId,
             rotaId: String(rota.id || ''),
-            entregadorId: entregador.id || '',
-            entregadorNome: meta.entregadorNome || entregador.nome || 'Entregador',
-            entregadorFoto: meta.entregadorFoto || entregador.foto || '',
+            participanteId: participante.id || '',
+            participanteNome: participante.nome || 'Contato',
+            participanteFoto: participante.foto || '',
+            participanteTipo: participante.tipo || 'ENTREGADOR',
             pacotesAbertos: abertos,
             ultimaMensagemTexto: ultimaMsg.texto,
             ultimaMensagemEm: Number(meta.ultimaMensagemEm || ultimaMsg.criadoEm || rota.atualizadoEm || rota.criadoEm || 0),
@@ -5044,7 +5073,7 @@ async function abrirThreadChat(chatId) {
     chatAtualId = chatId;
     const title = document.getElementById('chat-thread-title');
     const subtitle = document.getElementById('chat-thread-subtitle');
-    if (title) title.innerText = conversa.entregadorNome || 'Entregador';
+    if (title) title.innerText = conversa.participanteNome || 'Contato';
     if (subtitle) subtitle.innerText = `Rota ${conversa.rotaId} • ${conversa.pacotesAbertos} pacote(s) em aberto`;
 
     abrirPainelThreadChat();
@@ -5108,8 +5137,7 @@ async function chatEstaAtivo(conversa) {
     const rota = rotas.find((r) => String(r.id) === String(conversa.rotaId));
     if (!rota) return false;
     if (!rotaTemEntregadorAtivoParaChat(rota)) return false;
-    const pacotes = getPacotesDaRota(rota);
-    const abertos = pacotes.filter((p) => pacoteAbertoParaChat(p)).length;
+    const abertos = obterPacotesAbertosRotaParaChat(rota);
     return abertos > 0;
 }
 
@@ -5135,11 +5163,12 @@ async function enviarMensagemChat() {
 
     const criadoEm = Date.now();
     const msgId = `msg_${criadoEm}_${Math.random().toString(36).slice(2, 8)}`;
+    const remetenteTipoAtual = usuarioEhEntregador() ? 'ENTREGADOR' : 'LOJISTA';
     const payload = {
         id: msgId,
         texto,
         imagemDataUrl: imagemData || '',
-        remetenteTipo: 'LOJISTA',
+        remetenteTipo: remetenteTipoAtual,
         remetenteId: uid,
         criadoEm
     };
@@ -5148,16 +5177,28 @@ async function enviarMensagemChat() {
     const metaRef = chatRef.child('meta');
     const msgRef = chatRef.child(`mensagens/${msgId}`);
 
-    await msgRef.set(payload);
-    await metaRef.update({
+    const metaPayload = {
         rotaId: conversa.rotaId || '',
-        entregadorId: conversa.entregadorId || '',
-        entregadorNome: conversa.entregadorNome || 'Entregador',
-        entregadorFoto: conversa.entregadorFoto || '',
+        entregadorId: usuarioEhEntregador() ? uid : (conversa.participanteId || ''),
+        entregadorNome: usuarioEhEntregador() ? (window.usuarioLogado?.nome || 'Entregador') : (conversa.participanteNome || 'Entregador'),
+        entregadorFoto: usuarioEhEntregador() ? (window.usuarioLogado?.foto || '') : (conversa.participanteFoto || ''),
+        lojistaId: usuarioEhEntregador() ? (conversa.participanteId || '') : uid,
+        lojistaNome: usuarioEhEntregador() ? (conversa.participanteNome || 'Lojista') : (window.usuarioLogado?.nome || 'Lojista'),
+        lojistaFoto: usuarioEhEntregador() ? (conversa.participanteFoto || '') : (window.usuarioLogado?.foto || ''),
         ultimaMensagemTexto: texto || '[imagem]',
         ultimaMensagemEm: criadoEm,
         atualizadoEm: criadoEm
-    });
+    };
+
+    await msgRef.set(payload);
+    await metaRef.update(metaPayload);
+
+    const destinoUid = String(conversa.participanteId || '').trim();
+    if (destinoUid && destinoUid !== uid) {
+        const chatRefDestino = db.ref(`usuarios/${destinoUid}/chats/${chatAtualId}`);
+        await chatRefDestino.child(`mensagens/${msgId}`).set(payload);
+        await chatRefDestino.child('meta').update(metaPayload);
+    }
 
     if (input) input.value = '';
     limparPreviewImagemChat();
@@ -6055,6 +6096,13 @@ function iniciarListenerHomeEntregador() {
     entregadorHomeListenerCb = callback;
     entregadorHomeListenerUid = uid;
 }
+
+
+
+
+
+
+
 
 
 
