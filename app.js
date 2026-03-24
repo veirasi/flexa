@@ -84,34 +84,49 @@ function aplicarPermissoesPorTipoUsuario() {
     }
 
     const nav = document.getElementById('main-nav');
-    if (nav) {
-        const navItems = nav.querySelectorAll('.nav-item');
-        const navRotas = navItems[1] || null;
-        const navCenter = nav.querySelector('.nav-center-plus');
+    if (!nav) return;
 
+    const navItems = nav.querySelectorAll('.nav-item');
+    const navRotas = navItems[1] || null;
+    const navCenter = nav.querySelector('.nav-center-plus');
+
+    let precisaRecriarIcones = false;
+    const estadoDesejado = ehEntregador ? 'entregador' : 'lojista';
+
+    if (nav.dataset.layoutTipo !== estadoDesejado) {
         if (ehEntregador) {
             if (navRotas) {
                 navRotas.setAttribute('data-nav-target', 'view-rotas-historico');
                 navRotas.setAttribute('onclick', "irParaHistoricoRotasEntregador(); return false;");
                 navRotas.innerHTML = '<i data-lucide="map"></i><span>Rotas</span>';
+                precisaRecriarIcones = true;
             }
             if (navCenter) {
                 navCenter.setAttribute('data-nav-target', 'view-rotas-buscar');
                 navCenter.setAttribute('onclick', "irParaBuscarEntregador(); return false;");
                 navCenter.innerHTML = '<i data-lucide="plus" size="22"></i><span>Buscar</span>';
+                precisaRecriarIcones = true;
             }
         } else {
             if (navRotas) {
                 navRotas.setAttribute('data-nav-target', 'view-rotas');
                 navRotas.setAttribute('onclick', "navegar('view-rotas')");
                 navRotas.innerHTML = '<i data-lucide="map"></i><span>Rotas</span>';
+                precisaRecriarIcones = true;
             }
             if (navCenter) {
                 navCenter.setAttribute('data-nav-target', 'view-novo-envio');
                 navCenter.setAttribute('onclick', "navegar('view-novo-envio')");
                 navCenter.innerHTML = '<i data-lucide="plus" size="22"></i><span>Envio</span>';
+                precisaRecriarIcones = true;
             }
         }
+
+        nav.dataset.layoutTipo = estadoDesejado;
+    }
+
+    if (precisaRecriarIcones && typeof lucide !== 'undefined') {
+        lucide.createIcons();
     }
 }
 
@@ -6211,6 +6226,7 @@ function iniciarListenerHomeEntregador() {
     entregadorHomeListenerCb = callback;
     entregadorHomeListenerUid = uid;
 }
+
 
 
 
