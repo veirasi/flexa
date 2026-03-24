@@ -47,6 +47,7 @@ let entregadorMetaDiaCache = null;
 let rotasMarketplaceEntregadorCache = [];
 let filtroRotaEntregadorOrigem = 'TODAS';
 let filtroRotaEntregadorDestino = 'TODAS';
+let modoRotasEntregador = 'BUSCAR';
 
 function getUsuarioIdAtual() {
     return usuarioLogado?.id || (firebase.auth().currentUser ? firebase.auth().currentUser.uid : null);
@@ -80,6 +81,37 @@ function aplicarPermissoesPorTipoUsuario() {
     const tituloRotas = document.getElementById('rotas-main-title');
     if (tituloRotas) {
         tituloRotas.innerText = ehEntregador ? 'Rotas disponíveis' : 'Rotas aguardando';
+    }
+
+    const nav = document.getElementById('main-nav');
+    if (nav) {
+        const navItems = nav.querySelectorAll('.nav-item');
+        const navRotas = navItems[1] || null;
+        const navCenter = nav.querySelector('.nav-center-plus');
+
+        if (ehEntregador) {
+            if (navRotas) {
+                navRotas.setAttribute('data-nav-target', 'view-rotas-historico');
+                navRotas.setAttribute('onclick', "irParaHistoricoRotasEntregador(); return false;");
+                navRotas.innerHTML = '<i data-lucide="route"></i><span>Rotas</span>';
+            }
+            if (navCenter) {
+                navCenter.setAttribute('data-nav-target', 'view-rotas-buscar');
+                navCenter.setAttribute('onclick', "irParaBuscarEntregador(); return false;");
+                navCenter.innerHTML = '<i data-lucide="search" size="22"></i><span>Buscar</span>';
+            }
+        } else {
+            if (navRotas) {
+                navRotas.setAttribute('data-nav-target', 'view-rotas');
+                navRotas.setAttribute('onclick', "navegar('view-rotas')");
+                navRotas.innerHTML = '<i data-lucide="map"></i><span>Rotas</span>';
+            }
+            if (navCenter) {
+                navCenter.setAttribute('data-nav-target', 'view-novo-envio');
+                navCenter.setAttribute('onclick', "navegar('view-novo-envio')");
+                navCenter.innerHTML = '<i data-lucide="plus" size="22"></i><span>Envio</span>';
+            }
+        }
     }
 }
 
@@ -902,6 +934,15 @@ function ativarMenuInferior(targetTela) {
     atualizarEstadoBotaoCentralMenu(targetTela);
     requestAnimationFrame(atualizarIndicadorMenuInferior);
 }
+function irParaBuscarEntregador() {
+    modoRotasEntregador = 'BUSCAR';
+    navegar('view-rotas');
+}
+
+function irParaHistoricoRotasEntregador() {
+    modoRotasEntregador = 'HISTORICO';
+    navegar('view-rotas');
+}
 function ativarAbaChat() {
     ativarMenuInferior('view-chat');
     alert('Chat em breve');
@@ -919,7 +960,7 @@ function atualizarEstadoBotaoCentralMenu(idTela) {
     const plusBtn = document.querySelector('.nav-center-plus');
     if (!plusBtn) return;
 
-    const ativo = idTela === 'view-novo-envio';
+    const ativo = (idTela === 'view-novo-envio') || (usuarioEhEntregador() && idTela === 'view-rotas-buscar') || (usuarioEhEntregador() && idTela === 'view-rotas' && modoRotasEntregador === 'BUSCAR');
     plusBtn.classList.toggle('is-active', ativo);
 
     if (ativo) {
@@ -1001,6 +1042,8 @@ function navegar(idTela) {
         if (typeof renderRotasTelaPrincipal === 'function') renderRotasTelaPrincipal();
     }
 
+    aplicarPermissoesPorTipoUsuario();
+
     const nav = document.getElementById('main-nav');
     const telasComMenu = (tipo === 'entregador')
         ? ['view-dash-entregador', 'view-rotas', 'view-chat', 'view-perfil-entregador']
@@ -1011,14 +1054,17 @@ function navegar(idTela) {
         nav.style.display = mostrarMenu ? 'flex' : 'none';
 
         if (mostrarMenu) {
-            const navTarget = telaAlvo === 'view-perfil-entregador'
+            let navTarget = telaAlvo === 'view-perfil-entregador'
                 ? 'view-perfil'
                 : (telaAlvo === 'view-dash-entregador' ? 'view-dash-loja' : telaAlvo);
+
+            if (tipo === 'entregador' && telaAlvo === 'view-rotas') {
+                navTarget = modoRotasEntregador === 'HISTORICO' ? 'view-rotas-historico' : 'view-rotas-buscar';
+            }
+
             ativarMenuInferior(navTarget);
         }
     }
-
-    aplicarPermissoesPorTipoUsuario();
 
     window.scrollTo(0, 0);
     if (typeof lucide !== 'undefined') lucide.createIcons();
@@ -2917,9 +2963,59 @@ function formatarTamanhoTotalRota(pacotes) {
     return partes.length ? partes.join(' ') : '--';
 }
 
-async function renderRotasTelaPrincipal() {
+
+async function renderHistoricoRotasEntregador() {
+    const shell = document.getElementById('entregador-rotas-shell');
+    if (!shell || !usuarioEhEntregador()) return;
+
+    shell.classList.remove('hidden');
+
+    const saldo = Number(window.usuarioLogado?.financeiro?.saldo || 0);
+    const foto = window.usuarioLogado?.foto || 'https://via.placeholder.com/110';
+    const clientesNo = window.usuarioLogado?.clientes || {};
+    const mapaPacotes = montarMapaPacotesParaEntregador(clientesNo);
+    const rotasNo = window.usuarioLogado?.rotas || {};
+    const listaRotas = Object.keys(rotasNo).map((id) => ({ id, ...(rotasNo[id] || {}) }))
+        .sort((a, b) => Number(b?.atualizadoEm || b?.criadoEm || 0) - Number(a?.atualizadoEm || a?.criadoEm || 0));
+
+    const resumoLista = listaRotas
+        .map((r) => resumirRotaParaEntregador(r, mapaPacotes, window.usuarioLogado || {}))
+        .filter((r) => ['EM_ROTA', 'CONCLUIDO', 'CANCELADO'].includes(r.statusNorm));
+
+    const cards = resumoLista.length
+        ? resumoLista.map((r) => montarCardRotaEntregador(r, `${r.totalPacotes} pacote(s) • ${r.statusVisual.label}`)).join('')
+        : '<div class="entregador-rotas-empty">Sem histórico de rotas ainda.</div>';
+
+    shell.innerHTML = `
+        <div class="entregador-rotas-screen">
+            <div class="entregador-rotas-top">
+                <img src="img/logoflexa.png" alt="Flexa" class="entregador-rotas-logo-img">
+                <div class="entregador-rotas-wallet">
+                    <strong>${precoParaMoeda(saldo)}</strong>
+                    <img src="${escaparHtmlMarketplace(foto)}" alt="Usuario" class="entregador-rotas-wallet-avatar">
+                </div>
+            </div>
+
+            <div class="entregador-filtro-card">
+                <div class="entregador-filtro-head">
+                    <h3>Histórico de rotas</h3>
+                    <button type="button" onclick="irParaBuscarEntregador()">Buscar rotas</button>
+                </div>
+                <div class="entregador-rota-meta">Rotas em andamento e finalizadas por você.</div>
+            </div>
+
+            <div class="entregador-rotas-list">${cards}</div>
+        </div>
+    `;
+
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}async function renderRotasTelaPrincipal() {
     if (usuarioEhEntregador()) {
-        await renderRotasMarketplaceEntregador(true);
+        if (modoRotasEntregador === 'HISTORICO') {
+            await renderHistoricoRotasEntregador();
+        } else {
+            await renderRotasMarketplaceEntregador(true);
+        }
         return;
     }
     const container = document.getElementById('rotas-main-list');
@@ -6115,6 +6211,16 @@ function iniciarListenerHomeEntregador() {
     entregadorHomeListenerCb = callback;
     entregadorHomeListenerUid = uid;
 }
+
+
+
+
+
+
+
+
+
+
 
 
 

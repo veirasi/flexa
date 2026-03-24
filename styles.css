@@ -4209,7 +4209,13 @@
 }
 
 body.usuario-entregador #main-nav .nav-center-plus {
-    display: none !important;
+    display: flex !important;
+    background: transparent;
+    box-shadow: none;
+    border: none;
+    width: auto;
+    height: auto;
+    border-radius: 0;
 }
 
 body.usuario-entregador #rotas-hero-card,
@@ -4727,4 +4733,5 @@ body.usuario-entregador #entregador-rotas-shell {
 .dash-meta-item-amarelo small,
 .dash-meta-item-amarelo strong,
 .dash-meta-item-amarelo .dash-meta-icon { color: #e49317; }
+
 
