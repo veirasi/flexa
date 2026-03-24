@@ -93,12 +93,12 @@ function aplicarPermissoesPorTipoUsuario() {
             if (navRotas) {
                 navRotas.setAttribute('data-nav-target', 'view-rotas-historico');
                 navRotas.setAttribute('onclick', "irParaHistoricoRotasEntregador(); return false;");
-                navRotas.innerHTML = '<i data-lucide="route"></i><span>Rotas</span>';
+                navRotas.innerHTML = '<i data-lucide="map"></i><span>Rotas</span>';
             }
             if (navCenter) {
                 navCenter.setAttribute('data-nav-target', 'view-rotas-buscar');
                 navCenter.setAttribute('onclick', "irParaBuscarEntregador(); return false;");
-                navCenter.innerHTML = '<i data-lucide="search" size="22"></i><span>Buscar</span>';
+                navCenter.innerHTML = '<i data-lucide="plus" size="22"></i><span>Buscar</span>';
             }
         } else {
             if (navRotas) {
@@ -6211,6 +6211,7 @@ function iniciarListenerHomeEntregador() {
     entregadorHomeListenerCb = callback;
     entregadorHomeListenerUid = uid;
 }
+
 
 
 
