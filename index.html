@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="pt-br">
 <head>
     <meta charset="UTF-8">
@@ -158,6 +158,56 @@
     </div>
 </div>
 
+<!-- Modal Tracking Rota (Home Lojista) -->
+<div id="overlay-tracking-loja" class="modal-overlay tracking-overlay" onclick="fecharModalTrackingLoja()" style="display:none;">
+    <div class="tracking-shell" onclick="event.stopPropagation()">
+        <div class="tracking-sheet tracking-sheet-dark">
+            <div class="tracking-handle tracking-handle-light"></div>
+            <div class="tracking-row tracking-row-header">
+                <div class="tracking-route-id">
+                    <span class="tracking-label">ROTA</span>
+                    <strong id="track-loja-id">--</strong>
+                </div>
+                <div class="tracking-meta">
+                    <span id="track-loja-distancia">--</span> · <span id="track-loja-duracao">--</span>
+                </div>
+            </div>
+
+            <div class="tracking-timeline-row">
+                <div class="tracking-timeline" id="track-loja-timeline"></div>
+            </div>
+
+            <div class="tracking-grid tracking-grid-2col">
+                <div class="tracking-cell dark">
+                    <span class="tracking-label">Pacotes</span>
+                    <strong id="track-loja-pacotes">--</strong>
+                </div>
+                <div class="tracking-cell dark">
+                    <span class="tracking-label">Valor</span>
+                    <strong id="track-loja-valor">--</strong>
+                </div>
+            </div>
+
+              <div class="tracking-driver tracking-driver-dark" id="track-driver-row">
+                <div class="tracking-driver-info">
+                    <img id="track-driver-foto" src="https://via.placeholder.com/48" alt="Entregador">
+                    <div>
+                        <strong id="track-driver-nome">--</strong>
+                        <small id="track-driver-rol">Entregador</small>
+                    </div>
+                </div>
+                <div class="tracking-driver-actions">
+                    <button class="tracking-btn-circle ghost" id="track-driver-call" title="Ligar"><i data-lucide="phone"></i></button>
+                    <button class="tracking-btn-circle ghost" id="track-driver-chat" title="Mensagem"><i data-lucide="message-circle"></i></button>
+                </div>
+            </div>
+
+            <div class="tracking-actions tracking-actions-full">
+                <button class="tracking-btn main full" onclick="fecharModalTrackingLoja()">Fechar</button>
+            </div>
+        </div>
+    </div>
+</div>
 <div id="modal-acoes-cliente" class="modal-perfil-overlay" onclick="fecharModalAcoesCliente()">
     <div class="modal-perfil-sheet cliente-actions-sheet" onclick="event.stopPropagation()">
         <div class="selector-sheet-handle"></div>
@@ -179,7 +229,7 @@
         <h2 class="user-name" id="perfil-nome-display" style="font-size:22px; font-weight:800; color:var(--text-main); margin-bottom:5px;">Nome do Usuário</h2>
 
         <div style="display:flex; align-items:center; justify-content:center; gap:6px; color:var(--brand-orange); font-weight:600;">
-            <i data-lucide="instagram" size="16"></i>
+            <i data-lucide="at-sign" size="16"></i>
             <span class="user-instagram" id="perfil-insta-display">@instagram_user</span>
         </div>
     </div>
@@ -248,14 +298,14 @@
 
     <div class="perfil-content">
         <div class="perfil-section">
-            <h3 class="section-label">Dados profissionais</h3>
+            <h3 class="section-label">Conta</h3>
             <div class="menu-group">
-                <div class="menu-item menu-item-static">
-                    <div class="item-left"><i data-lucide="id-card"></i><span>CNH</span></div>
-                    <span id="perfil-entregador-cnh-display" class="menu-value">--</span>
-                </div>
                 <div class="menu-item" onclick="abrirModalPerfil()">
                     <div class="item-left"><i data-lucide="user"></i><span>Dados da conta</span></div>
+                    <i data-lucide="chevron-right" class="arrow" size="18"></i>
+                </div>
+                <div class="menu-item" onclick="abrirModalEndereco()">
+                    <div class="item-left"><i data-lucide="map-pin"></i><span>Endereço</span></div>
                     <i data-lucide="chevron-right" class="arrow" size="18"></i>
                 </div>
                 <div class="menu-item" onclick="abrirPagamento()">
@@ -292,16 +342,19 @@
 </section>
 <section id="view-rotas" class="view">
     <div id="entregador-rotas-shell" class="entregador-rotas-shell hidden"></div>
-    <header style="padding: 10px 0 15px; display: flex; justify-content: space-between; align-items: center;">
-        <div class="location-group">
-            <span style="font-size: 11px; color: var(--text-sub); font-weight: 700; text-transform: uppercase; letter-spacing: 0.8px;">Local de Coleta</span>
-            <h2 style="font-size: 18px; color: var(--text-main); font-weight: 800; display: flex; align-items: center; gap: 5px;">
-                <span id="local-coleta-cidade-uf">--</span> <i data-lucide="chevron-down" size="18" style="color: var(--brand-orange)"></i>
-            </h2>
-        </div>
-        <div class="notif-badge" style="width: 45px; height: 45px; background: white; border-radius: 50%; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.05); position: relative;">
+    <div class="logo-top">
+        <img src="img/logoflexa.png" alt="Flexa" class="flexa-brand-logo logo-top-fixed">
+        <div class="notif-badge">
             <i data-lucide="bell" size="22"></i>
-            <div class="dot" style="width: 8px; height: 8px; background: var(--brand-orange); border-radius: 50%; position: absolute; top: 12px; right: 12px; border: 2px solid white;"></div>
+            <div class="dot"></div>
+        </div>
+    </div>
+    <header class="rotas-header">
+        <div class="location-group">
+            <span class="location-label">Local de Coleta</span>
+            <h2 class="location-title">
+                <span id="local-coleta-cidade-uf">--</span> <i data-lucide="chevron-down" size="18" class="location-icon"></i>
+            </h2>
         </div>
     </header>
 
@@ -450,6 +503,7 @@
                 <div><span>Valor total</span><strong id="rota-detalhe-valor-total">R$ 0,00</strong></div>
                 <div><span>Peso total</span><strong id="rota-detalhe-peso-total">0 kg</strong></div>
                 <div><span>Tamanho total</span><strong id="rota-detalhe-tamanho-total">--</strong></div>
+                <div><span>Destino principal</span><strong id="rota-detalhe-destino">--</strong></div>
             </div>
         </div>
 
@@ -473,6 +527,25 @@
 </div>
 
 
+    <section id="view-buscar" class="view">
+        <div id="buscar-entregador-shell"></div>
+    </section>
+
+    <!-- Sheet de detalhes da rota (Buscar Entregador) -->
+    <div id="buscar-sheet-overlay" class="sheet-overlay hidden" onclick="fecharSheetBuscar()">
+        <div class="sheet-buscar" onclick="event.stopPropagation()">
+            <div class="sheet-handle"></div>
+            <div id="buscar-sheet-content"></div>
+        </div>
+    </div>
+
+    <!-- Sheet de detalhes da rota (Rotas Entregador) -->
+    <div id="rotas-entregador-sheet-overlay" class="sheet-overlay hidden" onclick="fecharSheetRotaEntregador()">
+        <div class="sheet-buscar" onclick="event.stopPropagation()">
+            <div class="sheet-handle"></div>
+            <div id="rotas-entregador-sheet-content"></div>
+        </div>
+    </div>
 <div id="overlay-rastrear-rota" class="modal-perfil-overlay" onclick="fecharModalRastrearRotas()" style="display:none;">
     <div class="modal-perfil-sheet rastrear-sheet" onclick="event.stopPropagation()">
         <div class="selector-sheet-handle"></div>
@@ -504,7 +577,12 @@
         <span>Envio</span>
     </div>
 
-    <a href="#" class="nav-item" data-nav-target="view-chat" onclick="ativarAbaChat(); return false;">
+    <a href="#" class="nav-item" data-nav-target="view-buscar" onclick="navegar('view-buscar')">
+        <i data-lucide="plus"></i>
+        <span>Buscar</span>
+    </a>
+
+    <a href="#" class="nav-item" id="nav-chat" data-nav-target="view-chat" onclick="ativarAbaChat(); return false;">
         <i data-lucide="message-circle"></i>
         <span>Chat</span>
     </a>
@@ -535,18 +613,42 @@
         </div>
 
         <div class="form-group">
-            <label>Nome do Usuário/Loja</label>
+            <label>Nome do Usuário</label>
             <div class="input-wrapper"><i data-lucide="user" size="20"></i><input type="text" id="edit-nome" placeholder="Seu nome"></div>
         </div>
 
         <div class="form-group">
             <label>Instagram</label>
-            <div class="input-wrapper"><i data-lucide="instagram" size="20"></i><input type="text" id="edit-instagram" placeholder="@sualoja"></div>
+            <div class="input-wrapper"><i data-lucide="at-sign" size="20"></i><input type="text" id="edit-instagram" placeholder="@sualoja"></div>
         </div>
 
         <div class="form-group">
             <label>WhatsApp</label>
             <div class="input-wrapper"><i data-lucide="phone" size="20"></i><input type="tel" id="edit-whatsapp" placeholder="(00) 00000-0000"></div>
+        </div>
+        <div class="form-group perfil-veiculo-group">
+            <label>CNH</label>
+            <div class="input-wrapper"><i data-lucide="id-card" size="20"></i><input type="text" id="edit-cnh" placeholder="Número da CNH"></div>
+        </div>
+        <div class="form-group perfil-veiculo-group">
+            <label>Tipo de veículo</label>
+            <div class="input-wrapper"><i data-lucide="truck" size="20"></i><input type="text" id="edit-veiculo-tipo" placeholder="Moto, Carro..."></div>
+        </div>
+        <div class="form-group perfil-veiculo-group">
+            <label>Marca</label>
+            <div class="input-wrapper"><input type="text" id="edit-veiculo-marca" placeholder="Marca"></div>
+        </div>
+        <div class="form-group perfil-veiculo-group">
+            <label>Modelo</label>
+            <div class="input-wrapper"><input type="text" id="edit-veiculo-modelo" placeholder="Modelo"></div>
+        </div>
+        <div class="form-group perfil-veiculo-group">
+            <label>Cor</label>
+            <div class="input-wrapper"><input type="text" id="edit-veiculo-cor" placeholder="Cor"></div>
+        </div>
+        <div class="form-group perfil-veiculo-group">
+            <label>Placa</label>
+            <div class="input-wrapper"><input type="text" id="edit-veiculo-placa" placeholder="AAA0A00"></div>
         </div>
 
         </div>
@@ -1029,7 +1131,7 @@
     <div class="modal-perfil-sheet envio-detalhe-sheet" onclick="event.stopPropagation()">
         <div class="sheet-header envio-detalhe-header">
             <div class="selector-sheet-handle"></div>
-            <div class="sheet-header-row" style="margin-bottom: 0;">
+            <div class="sheet-header-row envio-detalhe-header-row">
                 <h2 class="sheet-title envio-detalhe-title">Detalhes do Envio</h2>
                 <button type="button" class="selector-close-btn" onclick="fecharModalDetalheEnvio()">×</button>
             </div>
@@ -1102,10 +1204,215 @@
       window.FLEXA_MP_PUBLIC_KEY = "TEST-7a40c419-af65-4319-936d-47e6f6e422e2";
       window.FLEXA_MP_ACCESS_TOKEN = "TEST-2697640432267445-061309-cc681e1bce52b21e4cd7fe12bc950d23-454485523";
     </script>
+    <!-- LOGIN ADMIN MASTER -->
+    <section id="view-admin-login" class="view hidden">
+        <div class="admin-login">
+            <img src="img/logoflexa.png" alt="Flexa" class="admin-logo">
+            <h2>Login Admin</h2>
+            <p>Acesso exclusivo do master</p>
+            <div class="admin-form">
+                <label for="admin-email">E-mail</label>
+                <input id="admin-email" type="email" placeholder="admin@flexa.com">
+                <label for="admin-pass">Senha</label>
+                <input id="admin-pass" type="password" placeholder="Senha">
+                <button type="button" class="btn-main" onclick="loginAdmin()">Entrar</button>
+            </div>
+            <div class="admin-links">
+                <button type="button" class="admin-back-btn" onclick="window.location.href='/'">Voltar</button>
+                <button type="button" class="admin-back-btn" onclick="mostrarTelaAdminSignup()">Criar conta master</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- CADASTRO ADMIN MASTER -->
+    <section id="view-admin-signup" class="view hidden">
+        <div class="admin-login">
+            <img src="img/logoflexa.png" alt="Flexa" class="admin-logo">
+            <h2>Novo Admin</h2>
+            <p>Crie sua conta master</p>
+            <div class="admin-form">
+                <label for="admin-nome">Nome</label>
+                <input id="admin-nome" type="text" placeholder="Seu nome">
+                <label for="admin-email-cad">E-mail</label>
+                <input id="admin-email-cad" type="email" placeholder="admin@flexa.com">
+                <label for="admin-pass-cad">Senha</label>
+                <input id="admin-pass-cad" type="password" placeholder="Senha">
+                <label for="admin-key">Chave de acesso</label>
+                <input id="admin-key" type="password" placeholder="Informe a chave fornecida">
+                <button type="button" class="btn-main" onclick="criarContaMaster()">Criar conta master</button>
+            </div>
+            <div class="admin-links">
+                <button type="button" class="admin-back-btn" onclick="mostrarTelaAdminLogin()">Já tenho conta</button>
+            </div>
+        </div>
+    </section>
+
+    <!-- DASHBOARD ADMIN MASTER -->
+    <section id="view-admin-dashboard" class="view hidden">
+        <div class="admin-layout">
+            <aside class="admin-sidebar">
+                <div class="admin-sidebar-logo">
+                    <img src="img/logoflexa.png" alt="Flexa">
+                    <span>Console</span>
+                </div>
+                <button type="button" class="admin-nav-btn active" data-tab="overview" onclick="switchAdminTab('overview')">Visão geral</button>
+                <button type="button" class="admin-nav-btn" data-tab="users" onclick="switchAdminTab('users')">Usuários</button>
+                <button type="button" class="admin-nav-btn" data-tab="routes" onclick="switchAdminTab('routes')">Rotas</button>
+                <button type="button" class="admin-nav-btn" data-tab="packages" onclick="switchAdminTab('packages')">Pacotes</button>
+                <button type="button" class="admin-nav-btn" data-tab="database" onclick="switchAdminTab('database')">Banco de dados</button>
+                <div class="admin-sidebar-footer">
+                    <small id="admin-user-email">--</small>
+                    <button class="admin-chip danger" onclick="logoutReal()">Sair</button>
+                </div>
+            </aside>
+
+            <main class="admin-main">
+                <header class="admin-header">
+                    <div>
+                        <p class="admin-kicker">Master • tempo real</p>
+                        <h1>Visão geral</h1>
+                    </div>
+                    <div class="admin-header-actions">
+                        <button class="admin-chip" onclick="renderDashboardMaster()">Atualizar</button>
+                    </div>
+                </header>
+
+                <div class="admin-tab active" data-tab="overview">
+                    <div class="admin-cards-grid">
+                        <div class="admin-card">
+                            <span>Lojistas</span>
+                            <strong id="adm-total-lojas">--</strong>
+                            <small id="adm-ativas-lojas">Ativos agora: --</small>
+                        </div>
+                        <div class="admin-card">
+                            <span>Entregadores</span>
+                            <strong id="adm-total-entregas">--</strong>
+                            <small id="adm-ativas-entregas">Ativos agora: --</small>
+                        </div>
+                        <div class="admin-card">
+                            <span>Pacotes</span>
+                            <strong id="adm-pacotes-total">--</strong>
+                            <small id="adm-pacotes-status">Em rota / Entregues / Cancelados</small>
+                        </div>
+                        <div class="admin-card">
+                            <span>Rotas</span>
+                            <strong id="adm-rotas-total">--</strong>
+                            <small id="adm-rotas-status">Buscando / Em rota / Concluídas</small>
+                        </div>
+                    </div>
+                    <div class="admin-charts">
+                        <div class="admin-panel glass">
+                            <div class="admin-panel-head">
+                                <strong>Distribuição de usuários</strong>
+                            </div>
+                            <canvas id="adm-chart-usuarios"></canvas>
+                        </div>
+                        <div class="admin-panel glass">
+                            <div class="admin-panel-head">
+                                <strong>Status dos pacotes</strong>
+                            </div>
+                            <canvas id="adm-chart-pacotes"></canvas>
+                        </div>
+                        <div class="admin-panel glass">
+                            <div class="admin-panel-head">
+                                <strong>Status das rotas</strong>
+                            </div>
+                            <canvas id="adm-chart-rotas"></canvas>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-tab" data-tab="users">
+                    <div class="admin-panel">
+                        <div class="admin-panel-head">
+                            <strong>Usuários</strong>
+                            <div class="admin-panel-actions">
+                                <button class="admin-chip" onclick="renderDashboardMaster()">Recarregar</button>
+                            </div>
+                        </div>
+                        <div id="adm-users-table" class="admin-table"></div>
+                    </div>
+                </div>
+
+                <div class="admin-tab" data-tab="routes">
+                    <div class="admin-panel admin-panel-cards">
+                        <div class="admin-panel-head">
+                            <div>
+                                <p class="admin-kicker">Rotas</p>
+                                <h3>Gerenciar status</h3>
+                            </div>
+                            <div class="admin-panel-actions">
+                                <button class="admin-chip" onclick="renderDashboardMaster()">Atualizar</button>
+                                <button class="admin-chip" onclick="renderDashboardMaster()">Recarregar</button>
+                            </div>
+                        </div>
+                        <div id="adm-rotas-cards" class="adm-card-list"></div>
+                        <div class="adm-footer">
+                            <button class="btn-main" type="button" onclick="adminSalvarRotas()">Salvar</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="admin-tab" data-tab="packages">
+                    <div class="admin-panel admin-panel-cards">
+                        <div class="admin-panel-head">
+                            <div>
+                                <p class="admin-kicker">Pacotes</p>
+                                <h3>Gerenciar status</h3>
+                            </div>
+                            <div class="admin-panel-actions">
+                                <button class="admin-chip" onclick="adminCarregarPacotes()">Recarregar</button>
+                            </div>
+                        </div>
+                        <div id="adm-pack-cards" class="adm-card-list"></div>
+                        <div class="adm-footer">
+                            <button class="btn-main" type="button" onclick="adminSalvarPacotes()">Salvar</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-tab" data-tab="database">
+                    <div class="admin-panel">
+                        <div class="admin-panel-head">
+                            <strong>Banco de dados</strong>
+                            <div class="admin-panel-actions">
+                                <button class="admin-chip" onclick="adminListTables()">Atualizar</button>
+                            </div>
+                        </div>
+                        <div class="admin-db-grid">
+                            <div>
+                                <h4>Tabelas</h4>
+                                <div id="adm-db-tables" class="admin-table"></div>
+                            </div>
+                            <div class="admin-db-forms">
+                                <div class="admin-form">
+                                    <label>Nova tabela</label>
+                                    <input id="adm-new-table" type="text" placeholder="ex: relatorios">
+                                    <button class="btn-main" type="button" onclick="adminCreateTable()">Criar tabela</button>
+                                </div>
+                                <div class="admin-form">
+                                    <label>Adicionar campo</label>
+                                    <input id="adm-field-table" type="text" placeholder="tabela (ex: usuarios/UID)">
+                                    <input id="adm-field-key" type="text" placeholder="campo (ex: statusTeste)">
+                                    <input id="adm-field-value" type="text" placeholder="valor (texto)">
+                                    <button class="btn-main" type="button" onclick="adminCreateField()">Salvar campo</button>
+                                </div>
+                                <div class="admin-form">
+                                    <label>Excluir campo</label>
+                                    <input id="adm-del-path" type="text" placeholder="caminho completo ex: usuarios/UID/statusTeste">
+                                    <button class="btn-main danger" type="button" onclick="adminDeleteField()">Excluir</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </section>
+
     <script src="app.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 </body>
 </html>
-
 
 
 
