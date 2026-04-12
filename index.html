@@ -26,6 +26,23 @@
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body>
+    <!-- Template do cabeçalho global (logo + chip + sino) - não aplicado por padrão -->
+    <template id="ui-global-header-template">
+        <div class="global-header">
+            <div class="gh-left">
+                <img src="img/logoflexa.png" alt="Flexa" class="gh-logo">
+            </div>
+            <div class="gh-actions">
+                <button type="button" class="entregador-wallet-chip gh-chip">
+                    <span>R$ 0,00</span>
+                </button>
+                <div class="entregador-bell gh-bell">
+                    <i data-lucide="bell" size="18"></i>
+                    <span class="dot"></span>
+                </div>
+            </div>
+        </div>
+    </template>
 
 <div id="splash-screen">
     <img src="img/logo.svg" alt="Flexa Logo" class="logo-splash">
@@ -75,7 +92,7 @@
                 <form id="form-entrar">
                     <div class="form-group"><label>E-mail</label><div class="input-wrapper"><i data-lucide="mail" size="20"></i><input type="email" id="email-login" placeholder="Login de acesso"></div></div>
                     <div class="form-group"><label>Senha</label><div class="input-wrapper"><i data-lucide="lock" size="20"></i><input type="password" id="pass-login" placeholder="Sua senha"><i data-lucide="eye" size="20" style="cursor:pointer; color:var(--text-sub);" onclick="togglePass('pass-login')"></i></div></div>
-                    <button type="button" class="btn-main" onclick="loginReal()">Entrar na Flexa</button>
+                    <button type="button" class="btn-main ui-button primary" onclick="loginReal()">Entrar na Flexa</button>
                     <p style="text-align:center; margin-top:20px; font-size:14px; color:var(--brand-orange); font-weight:600; cursor:pointer;" onclick="navegar('view-recuperar')">Esqueci minha senha</p>
                 </form>
 
@@ -190,7 +207,7 @@
 
               <div class="tracking-driver tracking-driver-dark" id="track-driver-row">
                 <div class="tracking-driver-info">
-                    <img id="track-driver-foto" src="https://via.placeholder.com/48" alt="Entregador">
+                    <img id="track-driver-foto" src="img/avatar.png" alt="Entregador">
                     <div>
                         <strong id="track-driver-nome">--</strong>
                         <small id="track-driver-rol">Entregador</small>
@@ -223,14 +240,14 @@
 <section id="view-perfil" class="view">
     <div class="perfil-header" style="text-align:center; padding:30px 20px;">
         <div class="avatar-wrapper" style="width:110px; height:110px; margin:0 auto 15px; position:relative;">
-            <img src="https://via.placeholder.com/110" id="perfil-foto-display" alt="Avatar" style="width:100%; height:100%; border-radius:50%; object-fit:cover; border:3px solid #fff;">
+            <img src="img/avatar.png" id="perfil-foto-display" alt="Avatar" style="width:100%; height:100%; border-radius:50%; object-fit:cover; border:3px solid #fff;">
         </div>
 
         <h2 class="user-name" id="perfil-nome-display" style="font-size:22px; font-weight:800; color:var(--text-main); margin-bottom:5px;">Nome do Usuário</h2>
 
-        <div style="display:flex; align-items:center; justify-content:center; gap:6px; color:var(--brand-orange); font-weight:600;">
-            <i data-lucide="at-sign" size="16"></i>
-            <span class="user-instagram" id="perfil-insta-display">@instagram_user</span>
+        <div class="perfil-social-row">
+            <i data-lucide="instagram" size="16"></i>
+            <a class="user-instagram user-instagram-link" id="perfil-insta-display" href="#" target="_blank" rel="noopener noreferrer">instagram_user</a>
         </div>
     </div>
 
@@ -288,12 +305,15 @@
 <section id="view-perfil-entregador" class="view">
     <div class="perfil-header perfil-header-entregador" style="text-align:center; padding:30px 20px;">
         <div class="avatar-wrapper" style="width:110px; height:110px; margin:0 auto 15px; position:relative;">
-            <img src="https://via.placeholder.com/110" id="perfil-entregador-foto-display" alt="Avatar" style="width:100%; height:100%; border-radius:50%; object-fit:cover; border:3px solid #fff;">
+            <img src="img/avatar.png" id="perfil-entregador-foto-display" alt="Avatar" style="width:100%; height:100%; border-radius:50%; object-fit:cover; border:3px solid #fff;">
         </div>
 
         <span class="perfil-entregador-badge">Entregador</span>
         <h2 class="user-name" id="perfil-entregador-nome-display" style="font-size:22px; font-weight:800; color:var(--text-main); margin:8px 0 4px;">Nome do Entregador</h2>
-        <p id="perfil-entregador-email-display" class="perfil-entregador-sub">email@exemplo.com</p>
+        <div class="perfil-social-row">
+            <i data-lucide="instagram" size="16"></i>
+            <a class="user-instagram user-instagram-link" id="perfil-entregador-insta-display" href="#" target="_blank" rel="noopener noreferrer">instagram_user</a>
+        </div>
     </div>
 
     <div class="perfil-content">
@@ -342,13 +362,6 @@
 </section>
 <section id="view-rotas" class="view">
     <div id="entregador-rotas-shell" class="entregador-rotas-shell hidden"></div>
-    <div class="logo-top">
-        <img src="img/logoflexa.png" alt="Flexa" class="flexa-brand-logo logo-top-fixed">
-        <div class="notif-badge">
-            <i data-lucide="bell" size="22"></i>
-            <div class="dot"></div>
-        </div>
-    </div>
     <header class="rotas-header">
         <div class="location-group">
             <span class="location-label">Local de Coleta</span>
@@ -378,7 +391,6 @@
     </div>
 
     <div class="list-header rota-main-header">
-    <span id="rotas-main-title">Rotas aguardando</span>
 
     <a id="rotas-ver-todas" href="#" onclick="return verTodasAsRotas(event)" class="rota-main-link-ver-todas">
         Ver todas
@@ -603,7 +615,7 @@
 
         <div style="text-align:center; margin-bottom:25px;">
             <div style="position:relative; width:110px; height:110px; margin:0 auto; cursor:pointer;" onclick="document.getElementById('input-foto').click()">
-                <img id="edit-preview-img" src="https://via.placeholder.com/150" style="width:100%; height:100%; border-radius:50%; object-fit:cover; border:3px solid var(--brand-orange); transition: opacity 0.3s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
+                <img id="edit-preview-img" src="img/avatar.png" style="width:100%; height:100%; border-radius:50%; object-fit:cover; border:3px solid var(--brand-orange); transition: opacity 0.3s;" onmouseover="this.style.opacity='0.8'" onmouseout="this.style.opacity='1'">
                 <div style="position:absolute; top:0; left:0; width:100%; height:100%; border-radius:50%; display:flex; align-items:center; justify-content:center; background:rgba(0,0,0,0.1); font-size:12px; color:white; pointer-events:none;">
                      <i data-lucide="camera" size="20"></i>
                 </div>
@@ -847,9 +859,9 @@
     </div>
 </div>
 <div id="modal-envio-detalhes" class="modal-perfil-overlay">
-    <div class="modal-perfil-sheet" style="display: flex; flex-direction: column; max-height: 84vh;">
+    <div class="modal-perfil-sheet envio-sheet-modal" style="display: flex; flex-direction: column; max-height: 84vh;">
         <div class="sheet-header">
-            <div style="width: 40px; height: 4px; background: #e2e8f0; border-radius: 10px; margin: 0 auto 10px;"></div>
+            <div class="envio-sheet-handle" style="width: 40px; height: 4px; background: #e2e8f0; border-radius: 10px; margin: 0 auto 10px;"></div>
             <div class="sheet-header-row">
                 <i data-lucide="arrow-left" size="22" onclick="handleEnvioBack()" style="cursor:pointer"></i>
                 <h2 id="envio-sheet-title" class="sheet-title">Detalhes do Envio</h2>
@@ -863,7 +875,7 @@
             </div>
         </div>
 
-        <div style="flex: 1; overflow-y: auto; padding-right: 5px;">
+        <div class="envio-sheet-content" style="flex: 1; overflow-y: auto; padding-right: 5px;">
             <div id="modal-envio-step-1">
             <div class="destinatario-card">
                 <span class="destinatario-label">Destinatário</span>
@@ -1035,7 +1047,7 @@
             </div>
         </div>
 
-        <div id="modal-envio-footer-step-1" style="flex-shrink: 0; padding-top: 15px; background: white;">
+        <div id="modal-envio-footer-step-1" class="envio-sheet-footer" style="flex-shrink: 0; padding-top: 15px; background: white;">
             <button class="btn-main" onclick="irParaVeiculos()" style="margin-top: 0;">Opções de envio</button>
         </div>
     </div>

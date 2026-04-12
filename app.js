@@ -11,19 +11,99 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.database();
 const auth = firebase.auth();
+const AVATAR_PLACEHOLDER_SRC = 'img/avatar.png';
+
+function aplicarFotoComPlaceholder(imgEl, fotoUrl = '') {
+    if (!imgEl) return;
+    const fallback = AVATAR_PLACEHOLDER_SRC;
+    const src = String(fotoUrl || '').trim();
+    imgEl.onerror = () => {
+        imgEl.onerror = null;
+        imgEl.src = fallback;
+    };
+    imgEl.src = src || fallback;
+}
+
+function normalizarHandleInstagram(valor = '') {
+    let txt = String(valor || '').trim();
+    if (!txt) return '';
+    txt = txt.replace(/^@+/, '');
+
+    const m = txt.match(/instagram\.com\/([A-Za-z0-9._]+)/i);
+    if (m && m[1]) {
+        txt = m[1];
+    } else {
+        txt = txt.split(/[/?#\s]/)[0];
+    }
+
+    return txt.replace(/^@+/, '').trim();
+}
+
+function aplicarLinkInstagram(el, valor = '') {
+    if (!el) return;
+    const handle = normalizarHandleInstagram(valor);
+    const hasHandle = Boolean(handle);
+    el.textContent = hasHandle ? handle : 'instagram';
+    el.href = hasHandle ? `https://www.instagram.com/${encodeURIComponent(handle)}/` : '#';
+    el.classList.toggle('is-empty', !hasHandle);
+}
+
+function obterLayerSnackbar() {
+    let layer = document.getElementById('ui-snackbar-layer');
+    if (layer) return layer;
+    layer = document.createElement('div');
+    layer.id = 'ui-snackbar-layer';
+    layer.className = 'ui-snackbar-layer';
+    document.body.appendChild(layer);
+    return layer;
+}
+
+function notificarApp(mensagem = '', opts = {}) {
+    const texto = String(mensagem || '').trim();
+    if (!texto) return null;
+
+    const tipo = String(opts.tipo || 'info').toLowerCase();
+    const duracaoBase = Number.isFinite(Number(opts.duracao)) ? Number(opts.duracao) : Math.max(2200, Math.min(5200, texto.length * 45));
+    const duracao = Math.max(1200, duracaoBase);
+
+    const layer = obterLayerSnackbar();
+    const toast = document.createElement('div');
+    toast.className = `ui-snackbar is-${tipo}`;
+    toast.setAttribute('role', 'status');
+    toast.textContent = texto;
+    layer.appendChild(toast);
+
+    const fechar = () => {
+        toast.classList.remove('show');
+        setTimeout(() => {
+            if (toast.parentNode) toast.parentNode.removeChild(toast);
+        }, 220);
+    };
+
+    requestAnimationFrame(() => toast.classList.add('show'));
+    if (!opts.persistente) setTimeout(fechar, duracao);
+    toast.addEventListener('click', fechar);
+    return { close: fechar, element: toast };
+}
 
 function notificarErro(mensagem = 'Falha inesperada. Tente novamente.') {
-    try {
-        const old = document.querySelector('.toast-erro');
-        if (old) old.remove();
-        const div = document.createElement('div');
-        div.className = 'toast-erro';
-        div.innerText = mensagem;
-        document.body.appendChild(div);
-        setTimeout(() => div.remove(), 4000);
-    } catch (e) {
-        alert(mensagem);
-    }
+    return notificarApp(mensagem, { tipo: 'error', duracao: 3600 });
+}
+
+function notificarSucesso(mensagem = 'Operação concluída.') {
+    return notificarApp(mensagem, { tipo: 'success', duracao: 2600 });
+}
+
+const alertaNativo = (typeof window !== 'undefined' && typeof window.alert === 'function')
+    ? window.alert.bind(window)
+    : null;
+
+if (typeof window !== 'undefined') {
+    window.alertNativo = alertaNativo;
+    // Mensagens internas no app em formato Toast/Snackbar (sem alerta do sistema).
+    window.alert = function alertInterno(mensagem = '') {
+        notificarApp(mensagem, { tipo: 'info' });
+    };
 }
 
 // Variável para controle do usuário logado
@@ -52,6 +132,8 @@ let rotaDetalheSwipeEndX = 0;
 let rotaEntSheetPacotes = [];
 let rotaEntSheetIndex = 0;
 let rotaEntSheetRotaAtual = null;
+let rotaEntSheetTouchStartX = 0;
+let rotaEntSheetTouchStartY = 0;
 let lojistaLogoCache = {};
 let rotaEntregadorProgresso = {};
 let rotaSwipeStartX = 0;
@@ -179,20 +261,20 @@ function preencherPerfilLojista() {
     const fotoEl = document.getElementById('perfil-foto-display');
 
     if (nomeEl) nomeEl.innerText = dados.nome || 'Usuário';
-    if (instaEl) instaEl.innerText = dados.instagram || '@seuinsta';
-    if (fotoEl) fotoEl.src = dados.foto || 'https://via.placeholder.com/110';
+    aplicarLinkInstagram(instaEl, dados.instagram || '');
+    aplicarFotoComPlaceholder(fotoEl, dados.foto || '');
 }
 
 function preencherPerfilEntregador() {
     const dados = window.usuarioLogado || {};
     const nomeEl = document.getElementById('perfil-entregador-nome-display');
-    const emailEl = document.getElementById('perfil-entregador-email-display');
+    const instaEl = document.getElementById('perfil-entregador-insta-display');
     const fotoEl = document.getElementById('perfil-entregador-foto-display');
     const cnhEl = document.getElementById('perfil-entregador-cnh-display');
 
     if (nomeEl) nomeEl.innerText = dados.nome || 'Entregador';
-    if (emailEl) emailEl.innerText = dados.email || '--';
-    if (fotoEl) fotoEl.src = dados.foto || 'https://via.placeholder.com/110';
+    aplicarLinkInstagram(instaEl, dados.instagram || '');
+    aplicarFotoComPlaceholder(fotoEl, dados.foto || '');
     if (cnhEl) cnhEl.innerText = (dados.cnh || '--').toString();
 }
 async function loadClientes() {
@@ -1128,6 +1210,13 @@ function navegar(idTela) {
     }
     if (telaAlvo === 'view-buscar') {
         renderTelaBuscarEntregador(true);
+    }
+
+    if (telaAlvo === 'view-chat' || telaAlvo === 'view-novo-envio' || (telaAlvo === 'view-rotas' && tipo !== 'entregador')) {
+        aplicarHeaderGlobalEmViewEstatica(telaAlvo, tipo);
+    }
+    if (telaAlvo === 'view-perfil' || telaAlvo === 'view-perfil-entregador') {
+        limparHeaderGlobalEmView(telaAlvo);
     }
 
 
@@ -2394,6 +2483,10 @@ function renderizarDashboard(user) {
     const container = document.getElementById('dash-loader-content');
     if (!container) return;
 
+    const tipoUser = obterTipoUsuarioAtual();
+    const saldoUser = Number(user?.financeiro?.saldo || 0);
+    const headerHtml = renderHeaderGlobal(tipoUser, saldoUser);
+
     const localColeta = obterCidadeUfUsuarioLogado() || 'Defina o endereco';
 
     const envios = typeof coletarEnviosDaBase === 'function' ? coletarEnviosDaBase() : [];
@@ -2522,15 +2615,8 @@ function renderizarDashboard(user) {
         `;
 
     container.innerHTML = `
+        ${headerHtml}
         <div class="home-screen">
-            <header class="home-brand-row">
-                <img src="img/logoflexa.png" alt="Flexa" class="home-flexa-logo-img">
-                <button type="button" class="home-bell-btn" onclick="navegar('view-rotas')">
-                    <i data-lucide="bell"></i>
-                    <span class="home-bell-dot"></span>
-                </button>
-            </header>
-
             <div class="home-location-strip">
                 <span class="home-truck-icon"><i data-lucide="truck"></i></span>
                 <div class="home-address-text">
@@ -2603,11 +2689,17 @@ function buscarDadosDoBanco(uid) {
             // Atualiza os elementos da tela de Perfil se eles existirem na página
             const nomeDisplay = document.getElementById('perfil-nome-display');
             const instaDisplay = document.getElementById('perfil-insta-display');
+            const nomeEntDisplay = document.getElementById('perfil-entregador-nome-display');
+            const instaEntDisplay = document.getElementById('perfil-entregador-insta-display');
             const fotoDisplay = document.getElementById('perfil-foto-display');
+            const fotoEntDisplay = document.getElementById('perfil-entregador-foto-display');
 
             if (nomeDisplay) nomeDisplay.innerText = dados.nome || 'Usuário';
-            if (instaDisplay) instaDisplay.innerText = dados.instagram || '@seuinsta';
-            if (fotoDisplay) fotoDisplay.src = dados.foto || 'https://via.placeholder.com/110';
+            aplicarLinkInstagram(instaDisplay, dados.instagram || '');
+            if (nomeEntDisplay) nomeEntDisplay.innerText = dados.nome || 'Entregador';
+            aplicarLinkInstagram(instaEntDisplay, dados.instagram || '');
+            aplicarFotoComPlaceholder(fotoDisplay, dados.foto || '');
+            aplicarFotoComPlaceholder(fotoEntDisplay, dados.foto || '');
             
             // Renderiza o dash e navega (apenas na primeira carga)
             renderizarDashboard(dados);
@@ -2674,9 +2766,29 @@ function mapearCategoriaEnvio(envio) {
     return 'PACOTE_NOVO';
 }
 
+function normalizarFiltroChipEnvio(filtro = 'TODOS') {
+    const raw = normalizarTexto((filtro || 'TODOS').toString()).toUpperCase().replace(/\s+/g, '_');
+    if (raw === 'CONCLUIDO' || raw === 'CONCLUIDA' || raw === 'ENTREGUE' || raw === 'FINALIZADO' || raw === 'FINALIZADA') return 'ENTREGUE';
+    if (raw === 'CANCELADO' || raw === 'CANCELADA') return 'CANCELADO';
+    if (raw === 'EM_ROTA') return 'EM_ROTA';
+    if (raw === 'BUSCANDO') return 'BUSCANDO';
+    if (raw === 'PAGAMENTO_PENDENTE' || raw === 'PACOTE_NOVO') return 'PACOTE_NOVO';
+    if (raw === 'TODOS') return 'TODOS';
+    return raw || 'TODOS';
+}
+
 function envioPassaNoFiltro(envio) {
-    if (!filtroEnviosAtivo || filtroEnviosAtivo === 'TODOS') return true;
-    return mapearCategoriaEnvio(envio) === filtroEnviosAtivo;
+    const filtro = normalizarFiltroChipEnvio(filtroEnviosAtivo);
+    if (!filtro || filtro === 'TODOS') return true;
+    return mapearCategoriaEnvio(envio) === filtro;
+}
+
+function obterClasseCorStatusEnvioCard(envio) {
+    const categoria = mapearCategoriaEnvio(envio);
+    if (categoria === 'EM_ROTA') return 'status-blue';
+    if (categoria === 'ENTREGUE') return 'status-green';
+    if (categoria === 'BUSCANDO' || categoria === 'CANCELADO') return 'status-yellow';
+    return 'status-orange';
 }
 
 function rotaPassaNoFiltro(rota) {
@@ -2995,24 +3107,71 @@ function rotaMarketplacePassaNoFiltro(rota) {
     return passouOrigem && passouDestino;
 }
 
-function montarHeaderPadraoEntregador(saldo = 0) {
-    const saldoTxt = precoParaMoeda(Number(saldo) || 0);
-    return `
-        <div class="entregador-header">
-            <div class="entregador-header-left">
-                <img src="img/logoflexa.png" alt="Flexa" class="entregador-header-logo">
-            </div>
-            <div class="entregador-header-actions">
-                <button type="button" class="entregador-wallet-chip">
-                    <span>${saldoTxt}</span>
-                </button>
-                <div class="entregador-bell">
-                    <i data-lucide="bell" size="18"></i>
-                    <span class="dot"></span>
+// Cabeçalho global (logo + chip + sino) a partir do template em index.html.
+// Usa chip só para entregador.
+function renderHeaderGlobal(tipoUsuario = '', saldo = 0) {
+    const tpl = document.getElementById('ui-global-header-template');
+    const isEntregador = normalizarTexto(tipoUsuario) === 'entregador';
+
+    const buildInline = () => {
+        const chipHtml = isEntregador
+            ? `<button type="button" class="entregador-wallet-chip gh-chip"><span>${precoParaMoeda(Number(saldo) || 0)}</span></button>`
+            : '';
+        return `
+            <div class="global-header">
+                <div class="gh-left">
+                    <img src="img/logoflexa.png" alt="Flexa" class="gh-logo">
+                </div>
+                <div class="gh-actions">
+                    ${chipHtml}
+                    <div class="entregador-bell gh-bell">
+                        <i data-lucide="bell" size="18"></i>
+                        <span class="dot"></span>
+                    </div>
                 </div>
             </div>
-        </div>
-    `;
+        `;
+    };
+
+    if (!tpl || !tpl.content || !tpl.content.firstElementChild) {
+        return buildInline();
+    }
+
+    const node = tpl.content.firstElementChild.cloneNode(true);
+    const chip = node.querySelector('.gh-chip');
+    if (!isEntregador && chip) {
+        chip.remove();
+    } else if (isEntregador && chip) {
+        const span = chip.querySelector('span');
+        if (span) span.textContent = precoParaMoeda(Number(saldo) || 0);
+    }
+    return node.outerHTML || buildInline();
+}
+
+function limparHeaderGlobalEmView(viewId) {
+    const view = document.getElementById(viewId);
+    if (!view) return;
+    view.querySelectorAll('.global-header.global-header-live').forEach((el) => el.remove());
+}
+
+function aplicarHeaderGlobalEmViewEstatica(viewId, tipoUsuario = '') {
+    if (viewId === 'view-perfil' || viewId === 'view-perfil-entregador') {
+        limparHeaderGlobalEmView(viewId);
+        return;
+    }
+
+    const view = document.getElementById(viewId);
+    if (!view) return;
+
+    limparHeaderGlobalEmView(viewId);
+
+    const saldo = Number(window.usuarioLogado?.financeiro?.saldo || 0);
+    const html = renderHeaderGlobal(tipoUsuario, saldo);
+    if (!html) return;
+
+    view.insertAdjacentHTML('afterbegin', html);
+    const header = view.querySelector('.global-header');
+    if (header) header.classList.add('global-header-live');
 }
 
 function montarCardBuscaEntregador(rota) {
@@ -3295,8 +3454,9 @@ async function abrirSheetRotaEntregador(rotaId, opts = {}) {
     }
     rotaEntSheetPacotes = pacotes;
 
-    rotaEntSheetIndex = 0;
     registrarEstadosPacotesRota(rotaObj.id, rotaEntSheetPacotes);
+    const primeiroPendente = obterProximoIndicePacotePendente(rotaObj.id, rotaEntSheetPacotes, 0);
+    rotaEntSheetIndex = primeiroPendente >= 0 ? primeiroPendente : 0;
 
     overlay.classList.remove('hidden');
     requestAnimationFrame(() => overlay.classList.add('show'));
@@ -3394,8 +3554,20 @@ function registrarEstadosPacotesRota(rotaId, pacotes = []) {
     const estado = rotaEntregadorProgresso[rotaId];
     pacotes.forEach((p, idx) => {
         const chave = getChavePacoteRota(rotaId, p, idx);
+        const statusPacote = normalizarStatusEnvioFiltro(p?.statusRaw || p?.status || '');
+        const concluido = statusPacote === 'ENTREGUE' || statusPacote === 'CANCELADO';
+        const codigoPersistido = String(p?.codigoConfirmacaoEntrega || p?.codigoConfirmacao || '').trim();
         if (!estado.pacotes[chave]) {
-            estado.pacotes[chave] = { status: 'pendente', codigoConfirmacao: '' };
+            estado.pacotes[chave] = {
+                status: concluido ? 'concluido' : 'pendente',
+                codigoConfirmacao: codigoPersistido
+            };
+        } else if (concluido && estado.pacotes[chave].status !== 'concluido') {
+            estado.pacotes[chave] = {
+                ...estado.pacotes[chave],
+                status: 'concluido',
+                codigoConfirmacao: estado.pacotes[chave].codigoConfirmacao || codigoPersistido
+            };
         }
     });
 }
@@ -3413,11 +3585,274 @@ function setEstadoPacoteRota(rotaId, pac, dados, fallbackIdx = 0) {
     rotaEntregadorProgresso[rotaId].pacotes[chave] = { ...atual, ...dados };
 }
 
+function obterIdPacoteConfirmacao(pac = {}) {
+    return String(pac?.id || pac?.codigo || pac?.codigoPacote || pac?.codigoEntrega || '').trim();
+}
+
+function normalizarCodigoConfirmacaoEntrega(valor = '') {
+    return String(valor || '')
+        .trim()
+        .replace(/^#/, '')
+        .replace(/\s+/g, '')
+        .toLowerCase();
+}
+
+function pacoteConcluidoOuCanceladoNoSheet(rotaId, pac, idx = 0) {
+    const estado = obterEstadoPacoteRota(rotaId, pac, idx);
+    if (estado.status === 'concluido') return true;
+    const statusPac = normalizarStatusEnvioFiltro(pac?.statusRaw || pac?.status || '');
+    return statusPac === 'ENTREGUE' || statusPac === 'CANCELADO';
+}
+
+function obterProximoIndicePacotePendente(rotaId, pacotes = [], startIdx = 0) {
+    for (let i = startIdx; i < pacotes.length; i += 1) {
+        if (!pacoteConcluidoOuCanceladoNoSheet(rotaId, pacotes[i], i)) return i;
+    }
+    for (let i = 0; i < startIdx; i += 1) {
+        if (!pacoteConcluidoOuCanceladoNoSheet(rotaId, pacotes[i], i)) return i;
+    }
+    return -1;
+}
+
+function obterLojistaUidDaRota(rotaObj = {}, pac = {}) {
+    return String(
+        rotaObj?.origemLojistaUid
+        || rotaObj?.lojistaUid
+        || rotaObj?.lojistaId
+        || rotaObj?.uidLojista
+        || pac?.lojistaUid
+        || pac?.usuarioUid
+        || ''
+    ).trim();
+}
+
+function obterEntregadorUidDaRota(rotaObj = {}) {
+    return String(
+        getUsuarioIdAtual()
+        || rotaObj?.entregadorId
+        || rotaObj?.aceitoPor
+        || rotaObj?.entregadorUid
+        || ''
+    ).trim();
+}
+
+function calcularValorCreditoRota(rotaObj = {}, pacotes = []) {
+    const candidatos = [
+        rotaObj?.totalFrete,
+        rotaObj?.valorTotal,
+        rotaObj?.valor,
+        rotaObj?.preco
+    ];
+    for (const v of candidatos) {
+        const num = Number(v);
+        if (Number.isFinite(num) && num > 0) return Number(num.toFixed(2));
+        const moeda = parseMoedaParaNumero(v);
+        if (Number.isFinite(moeda) && moeda > 0) return Number(moeda.toFixed(2));
+    }
+
+    const somaPacotes = (Array.isArray(pacotes) ? pacotes : []).reduce((acc, p) => {
+        const freteNum = Number(p?.valorFrete);
+        if (Number.isFinite(freteNum) && freteNum > 0) return acc + freteNum;
+        const freteMoeda = parseMoedaParaNumero(p?.valor || p?.frete || 0);
+        return acc + (Number.isFinite(freteMoeda) ? freteMoeda : 0);
+    }, 0);
+    return Number(somaPacotes.toFixed(2));
+}
+
+function atualizarWalletChipEntregadorUI(saldo = 0) {
+    document.querySelectorAll('.entregador-wallet-chip span').forEach((el) => {
+        el.textContent = precoParaMoeda(Number(saldo) || 0);
+    });
+}
+
+async function creditarCarteiraEntregadorRotaFinalizada(rotaObj = {}, valorCredito = 0) {
+    const rotaId = String(rotaObj?.id || '').trim();
+    const uidEntregador = obterEntregadorUidDaRota(rotaObj);
+    const lojistaUid = obterLojistaUidDaRota(rotaObj, {});
+    const valor = Number(valorCredito || 0);
+    if (!rotaId || !uidEntregador || !Number.isFinite(valor) || valor <= 0) {
+        return { creditado: false, saldoAtualizado: Number(window.usuarioLogado?.financeiro?.saldo || 0) };
+    }
+
+    const agora = Date.now();
+    const markerRef = db.ref(`usuarios/${uidEntregador}/rotas/${rotaId}/creditoEntregadorEfetuadoEm`);
+    const markerTx = await markerRef.transaction((atual) => {
+        if (atual) return;
+        return agora;
+    });
+
+    if (!markerTx?.committed) {
+        return { creditado: false, saldoAtualizado: Number(window.usuarioLogado?.financeiro?.saldo || 0) };
+    }
+
+    const saldoRef = db.ref(`usuarios/${uidEntregador}/financeiro/saldo`);
+    let saldoAtualizado = Number(window.usuarioLogado?.financeiro?.saldo || 0);
+    await saldoRef.transaction((saldoAtual) => {
+        const novoSaldo = Number((Number(saldoAtual || 0) + valor).toFixed(2));
+        saldoAtualizado = novoSaldo;
+        return novoSaldo;
+    });
+
+    const updates = {
+        [`usuarios/${uidEntregador}/financeiro/atualizadoEm`]: agora,
+        [`usuarios/${uidEntregador}/rotas/${rotaId}/creditoEntregadorValor`]: valor,
+        [`usuarios/${uidEntregador}/rotas/${rotaId}/creditoEntregadorEfetuadoEm`]: agora,
+        [`usuarios/${uidEntregador}/rotas/${rotaId}/atualizadoEm`]: agora
+    };
+    if (lojistaUid) {
+        updates[`usuarios/${lojistaUid}/rotas/${rotaId}/creditoEntregadorValor`] = valor;
+        updates[`usuarios/${lojistaUid}/rotas/${rotaId}/creditoEntregadorEfetuadoEm`] = agora;
+        updates[`usuarios/${lojistaUid}/rotas/${rotaId}/atualizadoEm`] = agora;
+    }
+    await db.ref().update(updates);
+    await registrarTransacaoFinanceira('CREDITO', valor, `Rota ${rotaId} finalizada`);
+
+    if (!window.usuarioLogado) window.usuarioLogado = {};
+    window.usuarioLogado.financeiro = {
+        ...(window.usuarioLogado.financeiro || {}),
+        saldo: saldoAtualizado,
+        atualizadoEm: agora
+    };
+    if (entregadorHomeCache) {
+        entregadorHomeCache.financeiro = {
+            ...(entregadorHomeCache.financeiro || {}),
+            saldo: saldoAtualizado,
+            atualizadoEm: agora
+        };
+    }
+    pagamentoPerfilCache.saldo = saldoAtualizado;
+    atualizarWalletChipEntregadorUI(saldoAtualizado);
+
+    return { creditado: true, saldoAtualizado, valorCreditado: valor };
+}
+
+async function persistirEntregaPacoteAtual(rotaObj = {}, pac = {}, codigoConfirmacao = '') {
+    const rotaId = String(rotaObj?.id || '').trim();
+    const pacoteId = obterIdPacoteConfirmacao(pac);
+    const lojistaUid = obterLojistaUidDaRota(rotaObj, pac);
+    const uidEntregador = getUsuarioIdAtual();
+    const agora = Date.now();
+    const updates = {};
+
+    if (!rotaId || !pacoteId) {
+        throw new Error('Rota ou pacote inválido para confirmação.');
+    }
+
+    if (lojistaUid) {
+        const basePacoteUsuario = `usuarios/${lojistaUid}/pacotes/${pacoteId}`;
+        updates[`${basePacoteUsuario}/status`] = 'ENTREGUE';
+        updates[`${basePacoteUsuario}/statusRaw`] = 'ENTREGUE';
+        updates[`${basePacoteUsuario}/rotaId`] = rotaId;
+        updates[`${basePacoteUsuario}/codigoConfirmacaoEntrega`] = codigoConfirmacao;
+        updates[`${basePacoteUsuario}/entregueEm`] = agora;
+        updates[`${basePacoteUsuario}/atualizadoEm`] = agora;
+    }
+
+    const todosPacotesConcluidos = rotaEntSheetPacotes.every((p, idx) => {
+        if (idx === rotaEntSheetIndex) return true;
+        return pacoteConcluidoOuCanceladoNoSheet(rotaId, p, idx);
+    });
+
+    const statusRota = todosPacotesConcluidos ? 'CONCLUIDO' : 'EM_ROTA';
+    if (lojistaUid) {
+        const rotaLojistaPath = `usuarios/${lojistaUid}/rotas/${rotaId}`;
+        updates[`${rotaLojistaPath}/status`] = statusRota;
+        updates[`${rotaLojistaPath}/pagamentoStatus`] = statusRota;
+        updates[`${rotaLojistaPath}/atualizadoEm`] = agora;
+        if (todosPacotesConcluidos) updates[`${rotaLojistaPath}/concluidaEm`] = agora;
+    }
+    if (uidEntregador) {
+        const rotaEntregadorPath = `usuarios/${uidEntregador}/rotas/${rotaId}`;
+        updates[`${rotaEntregadorPath}/status`] = statusRota;
+        updates[`${rotaEntregadorPath}/pagamentoStatus`] = statusRota;
+        updates[`${rotaEntregadorPath}/atualizadoEm`] = agora;
+        if (todosPacotesConcluidos) updates[`${rotaEntregadorPath}/concluidaEm`] = agora;
+    }
+
+    if (lojistaUid) {
+        try {
+            const clientesSnap = await db.ref(`usuarios/${lojistaUid}/clientes`).once('value');
+            const clientesNo = clientesSnap.val() || {};
+            Object.keys(clientesNo).forEach((clienteId) => {
+                const historico = Array.isArray(clientesNo[clienteId]?.historico) ? clientesNo[clienteId].historico : [];
+                historico.forEach((h, idx) => {
+                    const idAtual = String(h?.id || (`envio-${clienteId}-${idx}`));
+                    if (idAtual !== pacoteId) return;
+                    const baseHistorico = `usuarios/${lojistaUid}/clientes/${clienteId}/historico/${idx}`;
+                    updates[`${baseHistorico}/id`] = idAtual;
+                    updates[`${baseHistorico}/status`] = 'ENTREGUE';
+                    updates[`${baseHistorico}/statusRaw`] = 'ENTREGUE';
+                    updates[`${baseHistorico}/rotaId`] = rotaId;
+                    updates[`${baseHistorico}/codigoConfirmacaoEntrega`] = codigoConfirmacao;
+                    updates[`${baseHistorico}/entregueEm`] = agora;
+                    updates[`${baseHistorico}/atualizadoEm`] = agora;
+                });
+            });
+        } catch (err) {
+            console.warn('Falha ao sincronizar histórico do cliente na confirmação de entrega:', err);
+        }
+    }
+
+    if (Object.keys(updates).length) {
+        await db.ref().update(updates);
+    }
+
+    window.pacotesRaizCache = window.pacotesRaizCache || {};
+    if (lojistaUid) {
+        window.pacotesRaizCache[lojistaUid] = window.pacotesRaizCache[lojistaUid] || {};
+        const atual = window.pacotesRaizCache[lojistaUid][pacoteId] || {};
+        window.pacotesRaizCache[lojistaUid][pacoteId] = {
+            ...atual,
+            ...pac,
+            id: pacoteId,
+            status: 'ENTREGUE',
+            statusRaw: 'ENTREGUE',
+            rotaId,
+            codigoConfirmacaoEntrega: codigoConfirmacao,
+            entregueEm: agora,
+            atualizadoEm: agora
+        };
+    }
+
+    if (window.usuarioLogado?.rotas?.[rotaId]) {
+        window.usuarioLogado.rotas[rotaId] = {
+            ...(window.usuarioLogado.rotas[rotaId] || {}),
+            status: statusRota,
+            pagamentoStatus: statusRota,
+            atualizadoEm: agora,
+            ...(todosPacotesConcluidos ? { concluidaEm: agora } : {})
+        };
+    }
+    if (entregadorHomeCache?.rotas?.[rotaId]) {
+        entregadorHomeCache.rotas[rotaId] = {
+            ...(entregadorHomeCache.rotas[rotaId] || {}),
+            status: statusRota,
+            pagamentoStatus: statusRota,
+            atualizadoEm: agora,
+            ...(todosPacotesConcluidos ? { concluidaEm: agora } : {})
+        };
+    }
+
+    let creditoResumo = { creditado: false, saldoAtualizado: Number(window.usuarioLogado?.financeiro?.saldo || 0), valorCreditado: 0 };
+    if (todosPacotesConcluidos) {
+        const valorCredito = calcularValorCreditoRota(rotaObj, rotaEntSheetPacotes);
+        try {
+            creditoResumo = await creditarCarteiraEntregadorRotaFinalizada(rotaObj, valorCredito);
+        } catch (err) {
+            console.warn('Falha ao creditar carteira do entregador na conclusão da rota:', err);
+        }
+    }
+
+    return { todosPacotesConcluidos, statusRota, ...creditoResumo };
+}
+
 function rotaSheetBloqueada() {
     if (!rotaEntSheetRotaAtual || !rotaEntSheetPacotes.length) return false;
     const pac = rotaEntSheetPacotes[rotaEntSheetIndex] || {};
     const estado = obterEstadoPacoteRota(rotaEntSheetRotaAtual.id, pac, rotaEntSheetIndex);
-    return estado.status === 'em_corrida';
+    const statusPac = normalizarStatusEnvioFiltro(pac?.statusRaw || pac?.status || '');
+    if (statusPac === 'ENTREGUE' || statusPac === 'CANCELADO' || estado.status === 'concluido') return false;
+    return estado.status === 'em_corrida' || statusPac === 'EM_ROTA';
 }
 
 // Nova versão do sheet de rota do entregador com paginação por pacote
@@ -3463,7 +3898,7 @@ function renderSheetRotaEntregadorConteudo() {
         || 'Destinatário';
 
     const estadoAtual = obterEstadoPacoteRota(rotaObj.id, pac, rotaEntSheetIndex);
-    const bloqueado = estadoAtual.status === 'em_corrida';
+    const bloqueado = rotaSheetBloqueada();
     const finalizado = estadoAtual.status === 'concluido';
 
     const dots = Array.from({ length: total }).map((_, idx) =>
@@ -3488,7 +3923,7 @@ function renderSheetRotaEntregadorConteudo() {
     `;
 
     content.innerHTML = `
-    <div class=\"sheet-buscar modal-ent-sheet\" style=\"background:#fff; border-radius:22px 22px 0 0; padding:18px 18px 20px 18px; box-shadow: 0 18px 36px rgba(0,0,0,0.20); width:100%;\">
+    <div class=\"sheet-buscar modal-ent-sheet\" style=\"background:#fff; border-radius:22px 22px 0 0; padding:18px 18px 20px 18px; box-shadow: 0 18px 36px rgba(0,0,0,0.20); width:100%;\" ontouchstart=\"iniciarSwipeEntSheet(event)\" ontouchend=\"finalizarSwipeEntSheet(event)\">
         <div class=\"ent-sheet-handle\"></div>
         <div class=\"ent-sheet-header\">
             <div class=\"ent-sheet-loja\">
@@ -3526,7 +3961,6 @@ function renderSheetRotaEntregadorConteudo() {
 }
 
 function entSheetPrev() {
-    if (rotaSheetBloqueada()) return;
     if (rotaEntSheetIndex <= 0) return;
     rotaEntSheetIndex -= 1;
     renderSheetRotaEntregadorConteudo();
@@ -3536,6 +3970,27 @@ function entSheetNext() {
     if (rotaEntSheetIndex >= rotaEntSheetPacotes.length - 1) return;
     rotaEntSheetIndex += 1;
     renderSheetRotaEntregadorConteudo();
+}
+
+function iniciarSwipeEntSheet(event) {
+    const touch = event?.touches?.[0];
+    if (!touch) return;
+    rotaEntSheetTouchStartX = Number(touch.clientX || 0);
+    rotaEntSheetTouchStartY = Number(touch.clientY || 0);
+}
+
+function finalizarSwipeEntSheet(event) {
+    const touch = event?.changedTouches?.[0];
+    if (!touch) return;
+    const endX = Number(touch.clientX || 0);
+    const endY = Number(touch.clientY || 0);
+    const dx = endX - rotaEntSheetTouchStartX;
+    const dy = endY - rotaEntSheetTouchStartY;
+    const movHorizontal = Math.abs(dx);
+    const movVertical = Math.abs(dy);
+    if (movHorizontal < 30 || movHorizontal <= movVertical) return;
+    if (dx < 0) entSheetNext(); // próximo pacote
+    else entSheetPrev(); // pacote anterior
 }
 
 function iniciarCorridaPacoteAtual(btn) {
@@ -3566,7 +4021,7 @@ function iniciarCorridaPacoteAtual(btn) {
     renderSheetRotaEntregadorConteudo();
 }
 
-function confirmarEntregaPacoteAtual() {
+async function confirmarEntregaPacoteAtual() {
     const rotaId = rotaEntSheetRotaAtual?.id;
     const pac = rotaEntSheetPacotes[rotaEntSheetIndex] || {};
     if (!rotaId || !pac) return;
@@ -3578,11 +4033,43 @@ function confirmarEntregaPacoteAtual() {
         return;
     }
 
-    setEstadoPacoteRota(rotaId, pac, { status: 'concluido' }, rotaEntSheetIndex);
-
-    if (rotaEntSheetIndex < rotaEntSheetPacotes.length - 1) {
-        rotaEntSheetIndex += 1;
+    const codigoEsperado = obterIdPacoteConfirmacao(pac);
+    if (!codigoEsperado) {
+        alert('Pacote sem ID de confirmação.');
+        return;
     }
+
+    if (normalizarCodigoConfirmacaoEntrega(codigo) !== normalizarCodigoConfirmacaoEntrega(codigoEsperado)) {
+        alert('Código inválido para este pacote. Confira o ID do envio.');
+        return;
+    }
+
+    let resultadoPersist = null;
+    try {
+        resultadoPersist = await persistirEntregaPacoteAtual(rotaEntSheetRotaAtual, pac, codigo);
+    } catch (err) {
+        console.warn('Falha ao confirmar entrega do pacote:', err);
+        alert('Não foi possível confirmar a entrega agora. Tente novamente.');
+        return;
+    }
+
+    setEstadoPacoteRota(rotaId, pac, { status: 'concluido', codigoConfirmacao: codigo }, rotaEntSheetIndex);
+    rotaEntSheetPacotes[rotaEntSheetIndex] = {
+        ...pac,
+        status: 'ENTREGUE',
+        statusRaw: 'ENTREGUE',
+        codigoConfirmacaoEntrega: codigo,
+        entregueEm: Date.now()
+    };
+
+    if (resultadoPersist?.todosPacotesConcluidos && resultadoPersist?.creditado && Number(resultadoPersist?.valorCreditado || 0) > 0) {
+        alert(`Entrega confirmada. Rota finalizada e ${precoParaMoeda(resultadoPersist.valorCreditado)} creditado na wallet.`);
+    } else {
+        alert('Entrega confirmada.');
+    }
+
+    const proximoIndice = obterProximoIndicePacotePendente(rotaId, rotaEntSheetPacotes, rotaEntSheetIndex + 1);
+    if (proximoIndice >= 0) rotaEntSheetIndex = proximoIndice;
 
     renderSheetRotaEntregadorConteudo();
 }
@@ -3936,11 +4423,9 @@ async function renderTelaBuscarEntregador(forceReload = false) {
     const cidadesDestino = [...new Set(rotasMarketplaceEntregadorCache.flatMap((r) => Array.isArray(r.destinos) ? r.destinos : []).filter(Boolean))]
         .sort((a, b) => a.localeCompare(b, 'pt-BR'));
 
-    const saldo = Number(window.usuarioLogado?.financeiro?.saldo || 0);
-
+        const headerHtml = renderHeaderGlobal('entregador', Number(window.usuarioLogado?.financeiro?.saldo || 0));
         shell.innerHTML = `
-        ${montarHeaderPadraoEntregador(saldo)}
-
+        ${headerHtml}
         <div class="buscar-card-field">
             <label><i data-lucide="map-pin" size="14"></i> Cidade de origem (onde você está)</label>
             ${montarDropdownFiltroMarketplace('buscar-filtro-origem', 'origem', cidadesOrigem, filtroRotaEntregadorOrigem, 'Qualquer origem')}
@@ -3993,13 +4478,13 @@ async function renderHistoricoRotasEntregador() {
         .filter((r) => ['EM_ROTA', 'CONCLUIDO', 'CANCELADO'].includes(r.statusNorm))
         .sort((a, b) => Number(b?.atualizadoEm || b?.criadoEm || 0) - Number(a?.atualizadoEm || a?.criadoEm || 0));
 
-    const saldo = Number(window.usuarioLogado?.financeiro?.saldo || 0);
     const cards = listaRotas.length
         ? listaRotas.map((r) => montarCardHistoricoRotaEntregador(r)).join('')
         : '<div class="rotas-ent-empty">Nenhuma rota em andamento ou finalizada.</div>';
 
+    const headerHtml = renderHeaderGlobal('entregador', Number(window.usuarioLogado?.financeiro?.saldo || 0));
     shell.innerHTML = `
-        ${montarHeaderPadraoEntregador(saldo)}
+        ${headerHtml}
         <div class="rotas-entregador-list">
             ${cards}
         </div>
@@ -4042,6 +4527,13 @@ async function renderRotasTelaPrincipal() {
     }
     if (hero) hero.style.display = 'none';
 
+    const rotasFiltradas = rotas.filter((rota) => rotaPassaNoFiltro(rota));
+    if (!rotasFiltradas.length) {
+        container.innerHTML = '<div class="rota-main-empty">Nenhuma rota neste filtro.</div>';
+        if (link) link.style.display = 'none';
+        return;
+    }
+
     const grupos = [
         { chave: 'BUSCANDO', titulo: 'Buscando' },
         { chave: 'EM_ROTA', titulo: 'Em rota' },
@@ -4050,7 +4542,7 @@ async function renderRotasTelaPrincipal() {
     ];
 
     const blocos = grupos.map((g) => {
-        const subset = rotas.filter((rota) => normalizarStatusRotaFiltro(rota?.status || rota?.pagamentoStatus || 'CRIADA') === g.chave);
+        const subset = rotasFiltradas.filter((rota) => normalizarStatusRotaFiltro(rota?.status || rota?.pagamentoStatus || 'CRIADA') === g.chave);
         if (!subset.length) return '';
 
         const cards = subset.map((rota) => {
@@ -4116,11 +4608,11 @@ function verTodasAsRotas(event) {
 }
 
 function selecionarFiltroEnvios(filtro = 'TODOS', btn = null) {
-    filtroEnviosAtivo = (filtro || 'TODOS').toString().toUpperCase();
+    filtroEnviosAtivo = normalizarFiltroChipEnvio(filtro || 'TODOS');
     const row = document.getElementById('envio-filter-row');
     if (row) {
         row.querySelectorAll('[data-envio-filter]').forEach((chip) => {
-            const alvo = (chip.dataset.envioFilter || '').toUpperCase();
+            const alvo = normalizarFiltroChipEnvio(chip.dataset.envioFilter || '');
             chip.classList.toggle('active', alvo === filtroEnviosAtivo);
         });
     }
@@ -5738,7 +6230,7 @@ function abrirModalPerfil() {
         document.getElementById('edit-veiculo-modelo').value = user.veiculoModelo || '';
         document.getElementById('edit-veiculo-cor').value = user.veiculoCor || '';
         document.getElementById('edit-veiculo-placa').value = user.veiculoPlaca || '';
-        if (user.foto) document.getElementById('edit-preview-img').src = user.foto;
+        aplicarFotoComPlaceholder(document.getElementById('edit-preview-img'), user.foto || '');
     }
 
     document.querySelectorAll('.perfil-veiculo-group').forEach((group) => {
@@ -6363,7 +6855,7 @@ function renderEnviosHome() {
     const row = document.getElementById('envio-filter-row');
     if (row) {
         row.querySelectorAll('[data-envio-filter]').forEach((chip) => {
-            const alvo = (chip.dataset.envioFilter || '').toUpperCase();
+            const alvo = normalizarFiltroChipEnvio(chip.dataset.envioFilter || '');
             chip.classList.toggle('active', alvo === filtroEnviosAtivo);
         });
     }
@@ -6393,6 +6885,7 @@ function renderEnviosHome() {
 
     container.innerHTML = filtrados.map((envio) => {
         const valor = Number(envio.valor || 0).toFixed(2).replace('.', ',');
+        const classeStatusCor = obterClasseCorStatusEnvioCard(envio);
         return `
             <div class="envio-swipe-container" id="envio-wrap-${envio.id}">
                 <div class="envio-swipe-delete">
@@ -6415,7 +6908,7 @@ function renderEnviosHome() {
                         </div>
                         <div class="envio-item-side">
                             <div class="envio-item-price">R$ ${valor}</div>
-                            <div class="envio-item-status">${envio.status}</div>
+                            <div class="envio-item-status ${classeStatusCor}">${envio.status}</div>
                         </div>
                     </div>
                     <div class="envio-item-line">
@@ -6859,6 +7352,7 @@ async function carregarChatsAtivos() {
         const chatsData = snapChats?.val() || {};
 
         const conversas = [];
+        const cacheChatsUsados = new Set();
         const cacheLojistaNome = {};
 
         for (const rota of rotas) {
@@ -6867,7 +7361,9 @@ async function carregarChatsAtivos() {
             const abertos = obterPacotesAbertosRotaParaChat(rota);
             if (abertos <= 0) continue;
 
-            const chatId = `rota_${sanitizeFirebaseKey(rota.id)}`;
+            const lojistaUid = String(rota?.lojistaUid || rota?.lojistaId || rota?.uidLoja || rota?.uidLojista || '');
+            const chatKeyBase = lojistaUid ? `lojista_${sanitizeFirebaseKey(lojistaUid)}` : `rota_${sanitizeFirebaseKey(rota.id)}`;
+            const chatId = chatKeyBase;
             const chatData = chatsData[chatId] || {};
             const ultimaMsg = obterUltimaMensagemResumo(chatData);
             const meta = chatData.meta || {};
@@ -6884,6 +7380,17 @@ async function carregarChatsAtivos() {
                 }
                 participante.nome = cacheLojistaNome[participante.id].nome;
                 participante.foto = participante.foto || cacheLojistaNome[participante.id].foto;
+            }
+
+            const existente = conversas.find((c) => c.chatId === chatId);
+            if (existente) {
+                existente.pacotesAbertos += abertos;
+                const novoUpdated = Number(rota.atualizadoEm || rota.criadoEm || 0);
+                if (novoUpdated > Number(existente.atualizadoEm || 0)) {
+                    existente.atualizadoEm = novoUpdated;
+                    existente.rotaId = String(rota.id || '');
+                }
+                continue;
             }
 
             conversas.push({
@@ -7885,6 +8392,7 @@ function renderizarDashboardEntregador(payloadUsuario = null) {
 
     const dados = payloadUsuario || entregadorHomeCache || window.usuarioLogado || {};
     const saldo = Number(dados?.financeiro?.saldo || 0);
+    const headerHtml = renderHeaderGlobal('entregador', saldo);
     const metaDia = obterMetaDiaEntregador(dados);
 
     const rotasNo = dados?.rotas || {};
@@ -7921,18 +8429,8 @@ function renderizarDashboardEntregador(payloadUsuario = null) {
     })();
 
     container.innerHTML = `
+        ${headerHtml}
         <div class="pb-28">
-            <div class="mb-3 flex items-center justify-between gap-3">
-                <img src="img/logoflexa.png" alt="Flexa" class="home-flexa-logo-img">
-                <div class="flex items-center gap-2">
-                    <span class="entregador-saldo-chip">${precoParaMoeda(saldo)}</span>
-                    <button type="button" class="relative inline-flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-sm" aria-label="Notificacoes">
-                        <i data-lucide="bell" class="h-4 w-4 text-slate-700"></i>
-                        <span class="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-red-500"></span>
-                    </button>
-                </div>
-            </div>
-
             <div class="mb-3 overflow-hidden rounded-2xl bg-white shadow-sm">
                 <img src="img/banner1.png" alt="Banner Flexa" class="h-auto w-full object-cover" onerror="this.style.display='none'">
             </div>
@@ -8150,6 +8648,7 @@ async function abrirModalTrackingLoja(rotaId) {
         const concluidos = entregues + cancelados;
         const grupo = Math.max(1, Math.ceil(total / maxDots));
         const dotsCount = Math.min(maxDots, Math.max(1, Math.ceil(total / grupo)));
+        timelineEl.classList.toggle('is-single', dotsCount === 1);
         let html = '';
         for (let i = 0; i < dotsCount; i++) {
             const rangeStart = i * grupo;
@@ -8180,13 +8679,20 @@ async function abrirModalTrackingLoja(rotaId) {
         };
 
     if (rowDriver) rowDriver.style.display = 'flex';
-    if (fotoEl) fotoEl.src = 'https://via.placeholder.com/48';
+    aplicarFotoComPlaceholder(fotoEl, '');
     if (nomeEl) nomeEl.innerText = '--';
     if (rolEl) rolEl.innerText = 'Entregador';
     setBtnState(btnCall, false);
     setBtnState(btnChat, false);
 
-    const entregadorId = rota?.entregadorId || rota?.aceitoPor || rota?.aceitoPorUid || rota?.entregadorUid || entregadorInfoDireto?.id;
+    const entregadorId =
+        rota?.entregadorId
+        || rota?.aceitoPor
+        || rota?.aceitoPorUid
+        || rota?.entregadorUid
+        || rota?.entregador?.id
+        || rota?.entregador?.uid
+        || entregadorInfoDireto?.id;
     const hasDriver = Boolean(entregadorId);
     const podeChat = hasDriver; // se o card está em rota, o vínculo já existe, libera chat
 
@@ -8197,7 +8703,7 @@ async function abrirModalTrackingLoja(rotaId) {
             if (rolEl) rolEl.innerText = driver.tipo === 'entregador' ? 'Entregador' : (driver.tipo || 'Entregador');
             if (fotoEl) {
                 const foto = driver.foto || driver.photoURL || driver.avatar || driver.logo;
-                if (foto) fotoEl.src = foto;
+                aplicarFotoComPlaceholder(fotoEl, foto || '');
             }
 
             const telefone = driver.whatsapp || driver.telefone || driver.celular || rota?.telefoneEntregador || driver?.contato || '';
@@ -8238,7 +8744,9 @@ async function abrirModalTrackingLoja(rotaId) {
 function abrirChatDaRota(rotaId) {
     if (!rotaId) return;
     const safeId = (typeof sanitizeFirebaseKey === 'function') ? sanitizeFirebaseKey(rotaId) : rotaId;
-    const chatId = `rota_${safeId}`;
+    const rotaRef = (rotasHomeCache || []).find((r) => String(r.id) === String(rotaId)) || {};
+    const lojistaUid = String(rotaRef?.lojistaUid || rotaRef?.lojistaId || rotaRef?.uidLoja || rotaRef?.uidLojista || '');
+    const chatId = lojistaUid ? `lojista_${sanitizeFirebaseKey(lojistaUid)}` : `rota_${safeId}`;
 
     // navega para aba chat
     if (typeof ativarMenuInferior === 'function') ativarMenuInferior('view-chat');
@@ -8246,7 +8754,6 @@ function abrirChatDaRota(rotaId) {
     // fecha o modal de tracking
     fecharModalTrackingLoja();
 
-    const rotaRef = (rotasHomeCache || []).find((r) => String(r.id) === String(rotaId)) || {};
     const participanteNome = rotaRef?.entregador?.nome || rotaRef?.entregadorNome || 'Entregador';
     const participanteId = rotaRef?.entregadorId || rotaRef?.entregadorUid || '';
 
